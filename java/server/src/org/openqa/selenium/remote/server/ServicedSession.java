@@ -65,7 +65,7 @@ public class ServicedSession extends RemoteSession {
   }
 
   @Override
-  public void stop() {
+  protected void doStop() {
     // Try and kill the running session. Both W3C and OSS use the same quit endpoint
     try {
       HttpRequest request = new HttpRequest(HttpMethod.DELETE, "/session/" + getId());

@@ -70,6 +70,7 @@ public abstract class RemoteSession implements ActiveSession {
   private final Map<String, Object> capabilities;
   private final TemporaryFilesystem filesystem;
   private final WebDriver driver;
+  private volatile boolean active;
 
   protected RemoteSession(
       Dialect downstream,
@@ -91,6 +92,7 @@ public abstract class RemoteSession implements ActiveSession {
     this.driver = new Augmenter().augment(new RemoteWebDriver(
         executor,
         new ImmutableCapabilities(getCapabilities())));
+    this.active = true;
   }
 
   @Override
@@ -126,6 +128,22 @@ public abstract class RemoteSession implements ActiveSession {
   @Override
   public void execute(HttpRequest req, HttpResponse resp) throws IOException {
     codec.handle(req, resp);
+  }
+
+  @Override
+  public final void stop() {
+    try {
+      doStop();
+    } finally {
+      active = false;
+    }
+  }
+
+  protected abstract void doStop();
+
+  @Override
+  public boolean isActive() {
+    return active;
   }
 
   public abstract static class Factory<X> implements SessionFactory {
