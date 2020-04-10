@@ -118,13 +118,13 @@ def test_set_log_level(options):
 
 
 def test_set_headless(options):
-    options.set_headless()
+    options.headless = True
     assert '-headless' in options._arguments
 
 
 def test_unset_headless(options):
     options._arguments = ['-headless']
-    options.set_headless(False)
+    options.headless = False
     assert '-headless' not in options._arguments
 
 
@@ -148,5 +148,38 @@ def test_creates_capabilities(options):
     assert opts['binary'] == '/bar'
     assert opts['prefs']['foo'] == 'bar'
     assert opts['profile'] == profile.encoded
-    assert opts['proxy']['proxyType'] == ProxyType.MANUAL['string']
+    assert caps['proxy']['proxyType'] == ProxyType.MANUAL['string']
     assert opts['log']['level'] == 'debug'
+
+
+def test_starts_with_default_capabilities(options):
+    from selenium.webdriver import DesiredCapabilities
+    caps = DesiredCapabilities.FIREFOX.copy()
+    caps.update({"pageLoadStrategy": "normal"})
+    assert options._caps == caps
+
+
+def test_is_a_baseoptions(options):
+    from selenium.webdriver.common.options import BaseOptions
+    assert isinstance(options, BaseOptions)
+
+
+def test_raises_exception_with_invalid_page_load_strategy(options):
+    with pytest.raises(ValueError):
+        options.page_load_strategy = 'never'
+
+
+def test_set_page_load_strategy(options):
+    options.page_load_strategy = 'normal'
+    assert options._caps["pageLoadStrategy"] == 'normal'
+
+
+def test_get_page_load_strategy(options):
+    options._page_load_strategy = 'normal'
+    assert options._caps["pageLoadStrategy"] == 'normal'
+
+
+def test_creates_capabilities_with_page_load_strategy(options):
+    options.page_load_strategy = 'eager'
+    caps = options.to_capabilities()
+    assert caps['pageLoadStrategy'] == 'eager'

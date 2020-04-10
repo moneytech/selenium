@@ -23,8 +23,8 @@ import org.junit.Test;
 
 public class TestCheckUncheck extends InternalSelenseTestBase {
   @Test
-  public void testCheckUncheck() throws Exception {
-    selenium.open("../tests/html/test_check_uncheck.html");
+  public void testCheckUncheck() {
+    selenium.open("test_check_uncheck.html");
     verifyTrue(selenium.isChecked("base-spud"));
     verifyFalse(selenium.isChecked("base-rice"));
     verifyTrue(selenium.isChecked("option-cheese"));

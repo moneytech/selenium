@@ -43,12 +43,11 @@ int IECommandHandler::GetElement(const IECommandExecutor& executor,
                                  const std::string& element_id,
                                  ElementHandle* element_wrapper) {
   LOG(TRACE) << "Entering IECommandHandler::GetElement";
-
   ElementHandle candidate_wrapper;
   int result = executor.GetManagedElement(element_id, &candidate_wrapper);
   if (result != WD_SUCCESS) {
     LOG(WARN) << "Unable to get managed element, element not found";
-    return ENOSUCHELEMENT;
+    return result;
   } else {
     if (!candidate_wrapper->IsAttachedToDom()) {
       LOG(WARN) << "Found managed element is no longer valid";
@@ -63,10 +62,7 @@ int IECommandHandler::GetElement(const IECommandExecutor& executor,
       CComPtr<IHTMLDocument2> focused_doc;
       current_browser->GetDocument(&focused_doc);
 
-      CComPtr<IDispatch> parent_doc_dispatch;
-      candidate_wrapper->element()->get_document(&parent_doc_dispatch);
-
-      if (focused_doc.IsEqualObject(parent_doc_dispatch)) {
+      if (candidate_wrapper->IsDocumentFocused(focused_doc)) {
         *element_wrapper = candidate_wrapper;
         return WD_SUCCESS;
       } else {

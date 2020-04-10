@@ -30,14 +30,23 @@ void Response::Deserialize(const std::string& json) {
   LOG(TRACE) << "Entering Response::Deserialize";
 
   Json::Value response_object;
-  Json::Reader reader;
-  reader.parse(json, response_object);
+  std::string parse_errors;
+  std::stringstream json_stream;
+  json_stream.str(json);
+  Json::parseFromStream(Json::CharReaderBuilder(),
+                        json_stream,
+                        &response_object,
+                        &parse_errors);
+
   Json::Value value_object;
   if (response_object.isMember("value")) {
     value_object = response_object["value"];
     if (value_object.isObject() && value_object.isMember("error")) {
       this->error_ = value_object["error"].asString();
       this->value_ = value_object["message"].asString();
+      if (value_object.isMember("data")) {
+        this->additional_data_ = value_object["data"];
+      }
     } else {
       this->error_ = "";
       this->value_ = value_object;
@@ -56,15 +65,15 @@ std::string Response::Serialize(void) {
     error_object["error"] = this->error_;
     error_object["message"] = this->value_.asString();
     error_object["stacktrace"] = "";
-    if (!this->value_.isNull()) {
+    if (!this->value_.isNull() && !this->additional_data_.isNull()) {
       error_object["data"] = this->additional_data_;
     }
     json_object["value"] = error_object;
   } else {
     json_object["value"] = this->value_;
   }
-  Json::FastWriter writer;
-  std::string output(writer.write(json_object));
+  Json::StreamWriterBuilder writer;
+  std::string output(Json::writeString(writer, json_object));
   return output;
 }
 
@@ -131,18 +140,18 @@ int Response::GetHttpResponseCode(void) {
              this->error_ == ERROR_STALE_ELEMENT_REFERENCE ||
              this->error_ == ERROR_UNKNOWN_COMMAND) {
     response_code = 404;
-  } else if (this->error_ == ERROR_SCRIPT_TIMEOUT ||
-             this->error_ == ERROR_WEBDRIVER_TIMEOUT) {
-    response_code = 408;
   } else if (this->error_ == ERROR_UNKNOWN_METHOD) {
     response_code = 405;
   } else if (this->error_ == ERROR_JAVASCRIPT_ERROR ||
              this->error_ == ERROR_MOVE_TARGET_OUT_OF_BOUNDS ||
+             this->error_ == ERROR_SCRIPT_TIMEOUT ||
              this->error_ == ERROR_SESSION_NOT_CREATED ||
              this->error_ == ERROR_UNABLE_TO_SET_COOKIE ||
              this->error_ == ERROR_UNABLE_TO_CAPTURE_SCREEN ||
              this->error_ == ERROR_UNEXPECTED_ALERT_OPEN ||
-             this->error_ == ERROR_UNKNOWN_ERROR) {
+             this->error_ == ERROR_UNKNOWN_ERROR ||
+             this->error_ == ERROR_UNSUPPORTED_OPERATION ||
+             this->error_ == ERROR_WEBDRIVER_TIMEOUT) {
     response_code = 500;
   } else {
     response_code = 200;
@@ -178,6 +187,14 @@ std::string Response::ConvertErrorCode(const int error_code) {
     return ERROR_INVALID_COOKIE_DOMAIN;
   } else if (error_code == ESCRIPTTIMEOUT) {
     return ERROR_SCRIPT_TIMEOUT;
+  } else if (error_code == EMOVETARGETOUTOFBOUNDS) {
+    return ERROR_MOVE_TARGET_OUT_OF_BOUNDS;
+  } else if (error_code == EINVALIDARGUMENT) {
+    return ERROR_INVALID_ARGUMENT;
+  } else if (error_code == ENOSUCHELEMENT) {
+    return ERROR_NO_SUCH_ELEMENT;
+  } else if (error_code == EUNSUPPORTEDOPERATION) {
+    return ERROR_UNSUPPORTED_OPERATION;
   }
 
   return "";
@@ -262,6 +279,10 @@ int Response::ConvertStatusToCode(const std::string& status_string) {
 
   if (status_string == "unknown error") {
     return EUNHANDLEDERROR;
+  }
+
+  if (status_string == "unsupported operation") {
+    return EUNSUPPORTEDOPERATION;
   }
 
   return EUNHANDLEDERROR;

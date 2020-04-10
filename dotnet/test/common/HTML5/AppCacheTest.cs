@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using NUnit.Framework;
 
 namespace OpenQA.Selenium.Html5
@@ -6,8 +6,7 @@ namespace OpenQA.Selenium.Html5
     [TestFixture]
     public class AppCacheTest : DriverTestFixture
     {
-        [Test]
-        [IgnoreBrowser(Browser.Android, "Untested feature")]
+        //[Test]
 		[IgnoreBrowser(Browser.Safari, "Unimplemented feature")]
 		public void TestAppCacheStatus()
         {

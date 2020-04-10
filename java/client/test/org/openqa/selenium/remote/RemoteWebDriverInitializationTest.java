@@ -17,79 +17,43 @@
 
 package org.openqa.selenium.remote;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.any;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableMap;
 
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.ImmutableCapabilities;
 import org.openqa.selenium.Platform;
-import org.openqa.selenium.testing.TestUtilities;
 
 import java.io.IOException;
+import java.util.UUID;
 
-@RunWith(JUnit4.class)
 public class RemoteWebDriverInitializationTest {
-  private boolean stopClientCalled = false;
   private boolean quitCalled = false;
 
   @Test
-  public void testStopsClientIfStartClientFails() {
-    Throwable ex = TestUtilities.catchThrowable(
-        () -> new BadStartClientRemoteWebDriver(mock(CommandExecutor.class),
-                                                new ImmutableCapabilities()));
-
-    assertNotNull(ex);
-    assertThat(ex.getMessage(), containsString("Stub client that should fail"));
-    assertTrue(stopClientCalled);
-  }
-
-  @Test
   public void testQuitsIfStartSessionFails() {
-    Throwable ex = TestUtilities.catchThrowable(
-        () -> new BadStartSessionRemoteWebDriver(mock(CommandExecutor.class),
-                                                 new ImmutableCapabilities()));
+    assertThatExceptionOfType(RuntimeException.class)
+        .isThrownBy(() -> new BadStartSessionRemoteWebDriver(mock(CommandExecutor.class), new ImmutableCapabilities()))
+        .withMessageContaining("Stub session that should fail");
 
-    assertNotNull(ex);
-    assertThat(ex.getMessage(), containsString("Stub session that should fail"));
-    assertTrue(quitCalled);
+    assertThat(quitCalled).isTrue();
   }
 
   @Test
   public void canHandleNonStandardCapabilitiesReturnedByRemoteEnd() throws IOException {
     Response resp = new Response();
+    resp.setSessionId(UUID.randomUUID().toString());
     resp.setValue(ImmutableMap.of("platformName", "xxx"));
     CommandExecutor executor = mock(CommandExecutor.class);
     when(executor.execute(any())).thenReturn(resp);
     RemoteWebDriver driver = new RemoteWebDriver(executor, new ImmutableCapabilities());
-    assertThat(driver.getCapabilities().getCapability("platform"), equalTo(Platform.UNIX));
-  }
-
-  private class BadStartClientRemoteWebDriver extends RemoteWebDriver {
-    public BadStartClientRemoteWebDriver(CommandExecutor executor,
-                                         Capabilities desiredCapabilities) {
-      super(executor, desiredCapabilities);
-    }
-
-    @Override
-    protected void startClient() {
-      throw new RuntimeException("Stub client that should fail");
-    }
-
-    @Override
-    protected void stopClient() {
-      stopClientCalled = true;
-    }
+    assertThat(driver.getCapabilities().getCapability("platform")).isEqualTo(Platform.UNIX);
   }
 
   private class BadStartSessionRemoteWebDriver extends RemoteWebDriver {

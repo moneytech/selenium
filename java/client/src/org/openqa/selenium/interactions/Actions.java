@@ -21,23 +21,20 @@ import static org.openqa.selenium.interactions.PointerInput.Kind.MOUSE;
 import static org.openqa.selenium.interactions.PointerInput.MouseButton.LEFT;
 import static org.openqa.selenium.interactions.PointerInput.MouseButton.RIGHT;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Sets;
-
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.UnsupportedCommandException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.interactions.PointerInput.Origin;
 import org.openqa.selenium.interactions.internal.MouseAction.Button;
-import org.openqa.selenium.interactions.internal.Locatable;
 
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.IntConsumer;
 import java.util.logging.Logger;
@@ -65,7 +62,7 @@ public class Actions {
   protected CompositeAction action = new CompositeAction();
 
   public Actions(WebDriver driver) {
-    this.driver = Preconditions.checkNotNull(driver);
+    this.driver = Objects.requireNonNull(driver);
 
     if (driver instanceof HasInputDevices) {
       HasInputDevices deviceOwner = (HasInputDevices) driver;
@@ -75,32 +72,6 @@ public class Actions {
       this.jsonKeyboard = null;
       this.jsonMouse = null;
     }
-  }
-
-  /**
-   * A constructor that should only be used when the keyboard or mouse were extended to provide
-   * additional functionality (for example, dragging-and-dropping from the desktop).
-   * @param keyboard the {@link Keyboard} implementation to delegate to.
-   * @param mouse the {@link Mouse} implementation to delegate to.
-   * @deprecated Use the new interactions APIs.
-   */
-  @Deprecated
-  public Actions(Keyboard keyboard, Mouse mouse) {
-    this.driver = null;
-    this.jsonKeyboard = keyboard;
-    this.jsonMouse = mouse;
-  }
-
-  /**
-   * Only used by the TouchActions class.
-   * @param keyboard implementation to delegate to.
-   * @deprecated Use the new interactions API.
-   */
-  @Deprecated
-  public Actions(Keyboard keyboard) {
-    this.driver = null;
-    this.jsonKeyboard = keyboard;
-    this.jsonMouse = null;
   }
 
   /**
@@ -241,9 +212,10 @@ public class Actions {
 
   private Actions addKeyAction(CharSequence key, IntConsumer consumer) {
     // Verify that we only have a single character to type.
-    Preconditions.checkState(
-        key.codePoints().count() == 1,
-        "Only one code point is allowed at a time: %s", key);
+    if (key.codePoints().count() != 1) {
+      throw new IllegalStateException(String.format(
+        "Only one code point is allowed at a time: %s", key));
+    }
 
     key.codePoints().forEach(consumer);
 
@@ -379,7 +351,7 @@ public class Actions {
 
   /**
    * Moves the mouse to the middle of the element. The element is scrolled into view and its
-   * location is calculated using getBoundingClientRect.
+   * location is calculated using getClientRects.
    * @param target element to move to.
    * @return A self reference.
    */
@@ -392,12 +364,12 @@ public class Actions {
   }
 
   /**
-   * Moves the mouse to an offset from the top-left corner of the element.
-   * The element is scrolled into view and its location is calculated using getBoundingClientRect.
+   * Moves the mouse to an offset from the center of the element.
+   * The element is scrolled into view and its location is calculated using getClientRects.
    * @param target element to move to.
-   * @param xOffset Offset from the top-left corner. A negative value means coordinates left from
+   * @param xOffset Offset from the center. A negative value means coordinates left from
    * the element.
-   * @param yOffset Offset from the top-left corner. A negative value means coordinates above
+   * @param yOffset Offset from the center. A negative value means coordinates above
    * the element.
    * @return A self reference.
    */
@@ -523,7 +495,7 @@ public class Actions {
   }
 
   public Actions pause(Duration duration) {
-    Preconditions.checkNotNull(duration, "Duration of pause not set");
+    Objects.requireNonNull(duration, "Duration of pause not set");
     if (isBuildingActions()) {
       action.addAction(new PauseAction(duration.toMillis()));
     }
@@ -550,7 +522,8 @@ public class Actions {
     }
 
     // And now pad the remaining sequences with a pause.
-    Set<InputSource> unseen = Sets.difference(sequences.keySet(), seenSources);
+    Set<InputSource> unseen = new HashSet<>(sequences.keySet());
+    unseen.removeAll(seenSources);
     for (InputSource source : unseen) {
       getSequence(source).addAction(new Pause(source, Duration.ZERO));
     }
@@ -559,7 +532,9 @@ public class Actions {
   }
 
   public Actions tick(Action action) {
-    Preconditions.checkState(action instanceof IsInteraction);
+    if (!(action instanceof IsInteraction)) {
+      throw new IllegalStateException("Expected action to implement IsInteraction");
+    }
 
     for (Interaction interaction :
         ((IsInteraction) action).asInteractions(defaultMouse, defaultKeyboard)) {
@@ -581,7 +556,7 @@ public class Actions {
    * @return the composite action
    */
   public Action build() {
-    Action toReturn = new BuiltAction(driver, ImmutableMap.copyOf(sequences), action);
+    Action toReturn = new BuiltAction(driver, new LinkedHashMap<>(sequences), action);
     action = new CompositeAction();
     sequences.clear();
     return toReturn;

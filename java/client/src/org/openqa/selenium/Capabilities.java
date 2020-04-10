@@ -17,9 +17,11 @@
 
 package org.openqa.selenium;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 
 /**
@@ -48,7 +50,7 @@ public interface Capabilities {
       return (Platform) rawPlatform;
     }
 
-    throw new IllegalStateException("Platform was neither a string or a Platform: " + rawPlatform);
+    throw new IllegalStateException("Platform was neither a string nor a Platform: " + rawPlatform);
   }
 
   default String getVersion() {
@@ -57,36 +59,26 @@ public interface Capabilities {
   }
 
   /**
-   * @deprecated Use is(SUPPORTS_JAVASCRIPT) instead
-   * @see #is(String)
-   * @see org.openqa.selenium.remote.CapabilityType#SUPPORTS_JAVASCRIPT
+   * @return The capabilities as a Map.
    */
-  @Deprecated
-  default boolean isJavascriptEnabled() {
-    return is("javascriptEnabled");
-  }
+  Map<String, Object> asMap();
 
   /**
-   * @return The capabilities as a Map
-   */
-  Map<String, ?> asMap();
-
-  /**
-   * @see org.openqa.selenium.remote.CapabilityType
    * @param capabilityName The capability to return.
    * @return The value, or null if not set.
+   * @see org.openqa.selenium.remote.CapabilityType
    */
   Object getCapability(String capabilityName);
 
   /**
-   * @see org.openqa.selenium.remote.CapabilityType
    * @param capabilityName The capability to check.
    * @return Whether or not the value is not null and not false.
+   * @see org.openqa.selenium.remote.CapabilityType
    */
   default boolean is(String capabilityName) {
     Object cap = getCapability(capabilityName);
     if (cap == null) {
-      // javascriptEnabled is true if not set explicitly
+      // If it's not set explicitly, javascriptEnabled is true.
       return "javascriptEnabled".equals(capabilityName);
     }
     return cap instanceof Boolean ? (Boolean) cap : Boolean.parseBoolean(String.valueOf(cap));
@@ -98,11 +90,14 @@ public interface Capabilities {
    * {@code this}.
    */
   default Capabilities merge(Capabilities other) {
-    HashMap<String, Object> map = new HashMap<>();
-    map.putAll(asMap());
+    HashMap<String, Object> map = new HashMap<>(asMap());
     if (other != null) {
       map.putAll(other.asMap());
     }
     return new ImmutableCapabilities(map);
+  }
+
+  default Set<String> getCapabilityNames() {
+    return Collections.unmodifiableSet(asMap().keySet());
   }
 }

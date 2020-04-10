@@ -36,16 +36,12 @@ import java.net.URL;
 public class TestOperaBlinkDriver extends RemoteWebDriver {
   private static OperaDriverService service;
 
-  public TestOperaBlinkDriver() {
-    super(operaWithCustomCapabilities(null));
-  }
-
   public TestOperaBlinkDriver(Capabilities capabilities) {
     super(getServiceUrl(), operaWithCustomCapabilities(capabilities));
   }
 
   private static URL getServiceUrl() {
-    if (service == null && !SauceDriver.shouldUseSauce()) {
+    if (service == null) {
       service = OperaDriverService.createDefaultService();
       try {
         service.start();
@@ -54,12 +50,7 @@ public class TestOperaBlinkDriver extends RemoteWebDriver {
       }
 
       // Fugly.
-      Runtime.getRuntime().addShutdownHook(new Thread() {
-        @Override
-        public void run() {
-          service.stop();
-        }
-      });
+      Runtime.getRuntime().addShutdownHook(new Thread(() -> service.stop()));
     }
     return service.getUrl();
   }
@@ -79,6 +70,7 @@ public class TestOperaBlinkDriver extends RemoteWebDriver {
     return options;
   }
 
+  @Override
   public <X> X getScreenshotAs(OutputType<X> target) {
     // Get the screenshot as base64.
     String base64 = (String) execute(DriverCommand.SCREENSHOT).getValue();

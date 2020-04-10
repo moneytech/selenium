@@ -17,73 +17,67 @@
 
 package org.openqa.selenium.remote.http;
 
-import org.openqa.selenium.remote.internal.ApacheHttpClient;
-import org.openqa.selenium.remote.internal.OkHttpClient;
-
-import java.io.IOException;
 import java.net.URL;
+import java.util.Objects;
+
+import static org.openqa.selenium.remote.http.ClientConfig.defaultConfig;
 
 /**
  * Defines a simple client for making HTTP requests.
  */
-public interface HttpClient {
+public interface HttpClient extends HttpHandler {
 
-  /**
-   * Executes the given request.
-   *
-   * @param request the request to execute.
-   * @param followRedirects whether to automatically follow redirects.
-   * @return the final response.
-   * @throws IOException if an I/O error occurs.
-   * @deprecated All call sites found set {@code followRedirects} to {@code true}. Use
-   *   {@link #execute(HttpRequest)}.
-   */
-  @Deprecated
-  HttpResponse execute(HttpRequest request, boolean followRedirects) throws IOException;
-
-  /**
-   * Executes the given request, following any redirects if necessary.
-   *
-   * @param request the request to execute.
-   * @return the final response.
-   * @throws IOException if an I/O error occurs.
-   */
-  HttpResponse execute(HttpRequest request) throws IOException;
-
-  /**
-	 * Closes the connections associated with this client.
-	 *
-	 * @throws  IOException  if an I/O error occurs.
-   * @deprecated This responsibility moved to Factory
-	 */
-  @Deprecated
-  void close() throws IOException;
+  WebSocket openSocket(HttpRequest request, WebSocket.Listener listener);
 
   interface Factory {
 
+    /**
+     * Use the {@code webdriver.http.factory} system property to determine which implementation of
+     * {@link HttpClient} should be used.
+     */
     static Factory createDefault() {
-      String defaultFactory = System.getProperty("webdriver.http.factory", "okhttp");
+      String defaultFactory = System.getProperty("webdriver.http.factory", "netty");
       switch (defaultFactory) {
-        case "apache":
-          return new ApacheHttpClient.Factory();
+        case "netty":
+          try {
+            Class<? extends Factory> clazz =
+                Class.forName("org.openqa.selenium.remote.http.netty.NettyClient$Factory")
+                    .asSubclass(Factory.class);
+            return clazz.getConstructor().newInstance();
+          } catch (ReflectiveOperationException e) {
+            throw new UnsupportedOperationException("Unable to create HTTP client factory", e);
+          }
 
         case "okhttp":
         default:
-          return new OkHttpClient.Factory();
+          try {
+            Class<? extends Factory> clazz =
+                Class.forName("org.openqa.selenium.remote.http.okhttp.OkHttpClient$Factory")
+                    .asSubclass(Factory.class);
+            return clazz.getConstructor().newInstance();
+          } catch (ReflectiveOperationException e) {
+            throw new UnsupportedOperationException("Unable to create HTTP client factory", e);
+          }
       }
     }
 
     /**
      * Creates a HTTP client that will send requests to the given URL.
      *
-     * @param url URL
-     * @return HttpClient
+     * @param url URL The base URL for requests.
      */
-    HttpClient createClient(URL url);
+    default HttpClient createClient(URL url) {
+      Objects.requireNonNull(url, "URL to use as base URL must be set.");
+      return createClient(defaultConfig().baseUrl(url));
+    }
+
+    HttpClient createClient(ClientConfig config);
 
     /**
      * Closes idle clients.
      */
-    void cleanupIdleClients();
+    default void cleanupIdleClients() {
+      // do nothing by default.
+    }
   }
 }

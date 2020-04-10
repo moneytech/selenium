@@ -19,11 +19,13 @@ package com.thoughtworks.selenium.corebased;
 
 import com.thoughtworks.selenium.InternalSelenseTestBase;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
+@Ignore("WebDriverBackedSelenium uses webdriver for xpath evaluation")
 public class TestUseXpathLibrary extends InternalSelenseTestBase {
   @Test
-  public void testUseXpathLibrary() throws Exception {
+  public void testUseXpathLibrary() {
     selenium.useXpathLibrary("ajaxslt");
     assertEquals(selenium.getEval("this.browserbot.xpathEvaluator.getCurrentEngine()"), "ajaxslt");
     assertEquals(selenium.getXpathCount("//"), "1");

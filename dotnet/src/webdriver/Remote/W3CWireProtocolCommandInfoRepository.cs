@@ -1,4 +1,4 @@
-﻿// <copyright file="W3CWireProtocolCommandInfoRepository.cs" company="WebDriver Committers">
+// <copyright file="W3CWireProtocolCommandInfoRepository.cs" company="WebDriver Committers">
 // Licensed to the Software Freedom Conservancy (SFC) under one
 // or more contributor license agreements. See the NOTICE file
 // distributed with this work for additional information
@@ -62,15 +62,10 @@ namespace OpenQA.Selenium.Remote
             this.TryAddCommand(DriverCommand.Close, new CommandInfo(CommandInfo.DeleteCommand, "/session/{sessionId}/window"));
             this.TryAddCommand(DriverCommand.SwitchToWindow, new CommandInfo(CommandInfo.PostCommand, "/session/{sessionId}/window"));
             this.TryAddCommand(DriverCommand.GetWindowHandles, new CommandInfo(CommandInfo.GetCommand, "/session/{sessionId}/window/handles"));
+            this.TryAddCommand(DriverCommand.NewWindow, new CommandInfo(CommandInfo.PostCommand, "/session/{sessionId}/window/new"));
             this.TryAddCommand(DriverCommand.SwitchToFrame, new CommandInfo(CommandInfo.PostCommand, "/session/{sessionId}/frame"));
             this.TryAddCommand(DriverCommand.SwitchToParentFrame, new CommandInfo(CommandInfo.PostCommand, "/session/{sessionId}/frame/parent"));
 
-            // TODO: Remove window size/position end points when spec-compliant remote ends have
-            // migrated to the window rect commands.
-            this.TryAddCommand(DriverCommand.GetWindowSize, new CommandInfo(CommandInfo.GetCommand, "/session/{sessionId}/window/size"));
-            this.TryAddCommand(DriverCommand.SetWindowSize, new CommandInfo(CommandInfo.PostCommand, "/session/{sessionId}/window/size"));
-            this.TryAddCommand(DriverCommand.GetWindowPosition, new CommandInfo(CommandInfo.GetCommand, "/session/{sessionId}/window/position"));
-            this.TryAddCommand(DriverCommand.SetWindowPosition, new CommandInfo(CommandInfo.PostCommand, "/session/{sessionId}/window/position"));
             this.TryAddCommand(DriverCommand.GetWindowRect, new CommandInfo(CommandInfo.GetCommand, "/session/{sessionId}/window/rect"));
             this.TryAddCommand(DriverCommand.SetWindowRect, new CommandInfo(CommandInfo.PostCommand, "/session/{sessionId}/window/rect"));
 
@@ -108,7 +103,7 @@ namespace OpenQA.Selenium.Remote
             this.TryAddCommand(DriverCommand.GetAlertText, new CommandInfo(CommandInfo.GetCommand, "/session/{sessionId}/alert/text"));
             this.TryAddCommand(DriverCommand.SetAlertValue, new CommandInfo(CommandInfo.PostCommand, "/session/{sessionId}/alert/text"));
             this.TryAddCommand(DriverCommand.Screenshot, new CommandInfo(CommandInfo.GetCommand, "/session/{sessionId}/screenshot"));
-            this.TryAddCommand(DriverCommand.ElementScreenshot, new CommandInfo(CommandInfo.GetCommand, "/session/{sessionId}/screenshot/{id}"));
+            this.TryAddCommand(DriverCommand.ElementScreenshot, new CommandInfo(CommandInfo.GetCommand, "/session/{sessionId}/element/{id}/screenshot"));
 
             // Commands below here are not included in the W3C specification,
             // but are required for full fidelity of execution with Selenium's

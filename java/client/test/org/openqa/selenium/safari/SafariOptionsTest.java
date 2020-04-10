@@ -17,47 +17,82 @@
 
 package org.openqa.selenium.safari;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.common.collect.ImmutableMap;
 
 import org.junit.Test;
-import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.ImmutableCapabilities;
+import org.openqa.selenium.remote.CapabilityType;
 
+import java.util.HashMap;
 import java.util.Map;
 
 public class SafariOptionsTest {
 
   @Test
-  public void commonUsagePatternWorks() {
-    SafariOptions options = new SafariOptions().useCleanSession(true);
-    Map<String, ?> caps = options.asMap();
-    assertEquals(((Map<String, ?>) caps.get(SafariOptions.CAPABILITY)).get("cleanSession"), true);
-  }
-
-  @Test
   public void roundTrippingToCapabilitiesAndBackWorks() {
-    SafariOptions expected = new SafariOptions()
-        .useCleanSession(true)
-        .setUseTechnologyPreview(true);
+    SafariOptions expected = new SafariOptions().setUseTechnologyPreview(true);
 
     // Convert to a Map so we can create a standalone capabilities instance, which we then use to
     // create a new set of options. This is the round trip, ladies and gentlemen.
     SafariOptions seen = new SafariOptions(new ImmutableCapabilities(expected.asMap()));
 
-    assertEquals(expected, seen);
+    assertThat(seen).isEqualTo(expected);
   }
 
   @Test
   public void canConstructFromCapabilities() {
-    SafariOptions options = new SafariOptions(
-        new ImmutableCapabilities("cleanSession", true, "technologyPreview", true));
+    Map<String, Object> embeddedOptions = new HashMap<>();
+    embeddedOptions.put("technologyPreview", true);
 
-    assertTrue(options.getUseCleanSession());
-    assertTrue(options.getUseTechnologyPreview());
+    SafariOptions options = new SafariOptions();
+    assertThat(options.getUseTechnologyPreview()).isFalse();
+
+    options = new SafariOptions(new ImmutableCapabilities(SafariOptions.CAPABILITY, embeddedOptions));
+    assertThat(options.getUseTechnologyPreview()).isTrue();
+
+    embeddedOptions.put("technologyPreview", false);
+    options = new SafariOptions(new ImmutableCapabilities(SafariOptions.CAPABILITY, embeddedOptions));
+    assertThat(options.getUseTechnologyPreview()).isFalse();
+
+    options = new SafariOptions(new ImmutableCapabilities(CapabilityType.BROWSER_NAME, "Safari Technology Preview"));
+    assertThat(options.getUseTechnologyPreview()).isTrue();
+
+    options = new SafariOptions(new ImmutableCapabilities(CapabilityType.BROWSER_NAME, "safari"));
+    assertThat(options.getUseTechnologyPreview()).isFalse();
   }
 
+  @Test
+  public void newerStyleCapabilityWinsOverOlderStyle() {
+    SafariOptions options = new SafariOptions(new ImmutableCapabilities(
+        CapabilityType.BROWSER_NAME, "Safari Technology Preview",
+        SafariOptions.CAPABILITY, ImmutableMap.of("technologyPreview", false)));
+
+    assertThat(options.getUseTechnologyPreview()).isTrue();
+  }
+
+  @Test
+  public void canSetAutomaticInspection() {
+    SafariOptions options = new SafariOptions().setAutomaticInspection(true);
+    assertThat(options.getAutomaticInspection()).isTrue();
+  }
+
+  @Test
+  public void canSetAutomaticProfiling() {
+    SafariOptions options = new SafariOptions().setAutomaticProfiling(true);
+    assertThat(options.getAutomaticProfiling()).isTrue();
+  }
+
+  @Test
+  public void settingTechnologyPreviewModeAlsoChangesBrowserName() {
+    SafariOptions options = new SafariOptions();
+    assertThat(options.getBrowserName()).isEqualTo("safari");
+
+    options.setUseTechnologyPreview(true);
+    assertThat(options.getBrowserName()).isEqualTo("Safari Technology Preview");
+
+    options.setUseTechnologyPreview(false);
+    assertThat(options.getBrowserName()).isEqualTo("safari");
+  }
 }

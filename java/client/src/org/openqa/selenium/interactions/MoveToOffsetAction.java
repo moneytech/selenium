@@ -17,14 +17,13 @@
 
 package org.openqa.selenium.interactions;
 
-import com.google.common.collect.ImmutableList;
-
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.interactions.PointerInput.Origin;
 import org.openqa.selenium.interactions.internal.MouseAction;
-import org.openqa.selenium.interactions.internal.Locatable;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -45,6 +44,7 @@ public class MoveToOffsetAction extends MouseAction implements Action {
     yOffset = y;
   }
 
+  @Override
   public void perform() {
     mouse.mouseMove(getActionLocation(), xOffset, yOffset);
   }
@@ -53,7 +53,7 @@ public class MoveToOffsetAction extends MouseAction implements Action {
   public List<Interaction> asInteractions(PointerInput mouse, KeyInput keyboard) {
     Optional<WebElement> target = getTargetElement();
 
-    ImmutableList.Builder<Interaction> interactions = ImmutableList.builder();
+    List<Interaction> interactions = new ArrayList<>();
 
     interactions.add(mouse.createPointerMove(
         Duration.ofMillis(500),
@@ -61,6 +61,6 @@ public class MoveToOffsetAction extends MouseAction implements Action {
         xOffset,
         yOffset));
 
-    return interactions.build();
+    return Collections.unmodifiableList(interactions);
   }
 }

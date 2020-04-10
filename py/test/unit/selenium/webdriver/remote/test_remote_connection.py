@@ -21,6 +21,7 @@ try:
 except ImportError:  # above is available in py3+, below is py2.7
     import urlparse as parse
 
+from selenium import __version__
 from selenium.webdriver.remote.remote_connection import (
     RemoteConnection,
 )
@@ -33,7 +34,8 @@ def test_get_remote_connection_headers_defaults():
     assert 'Connection' not in headers.keys()
     assert headers.get('Accept') == 'application/json'
     assert headers.get('Content-Type') == 'application/json;charset=UTF-8'
-    assert headers.get('User-Agent') == 'Python http auth'
+    assert headers.get('User-Agent').startswith("selenium/%s (python " % __version__)
+    assert headers.get('User-Agent').split(' ')[-1] in {'windows)', 'mac)', 'linux)'}
 
 
 def test_get_remote_connection_headers_adds_auth_header_if_pass():
@@ -60,27 +62,3 @@ class MockResponse:
 
     def getheader(self, *args, **kwargs):
         pass
-
-
-def test_remote_connection_adds_connection_headers_from_get_remote_connection_headers(mocker):
-    test_headers = {'FOO': 'bar', 'Content-Type': 'json'}
-    expected_request_headers = {'Foo': 'bar', 'Content-type': 'json'}
-
-    # Stub out the get_remote_connection_headers method to return something testable
-    mocker.patch(
-        'selenium.webdriver.remote.remote_connection.RemoteConnection.get_remote_connection_headers'
-    ).return_value = test_headers
-
-    # Stub out response
-    try:
-        mock_open = mocker.patch('urllib.request.OpenerDirector.open')
-    except ImportError:
-        mock_open = mocker.patch('urllib2.OpenerDirector.open')
-
-    def assert_header_added(request, timeout):
-        assert request.headers == expected_request_headers
-        return MockResponse()
-
-    mock_open.side_effect = assert_header_added
-
-    RemoteConnection('http://remote', resolve_ip=False).execute('status', {})

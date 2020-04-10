@@ -21,24 +21,32 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using OpenQA.Selenium.Internal;
 
 namespace OpenQA.Selenium.Remote
 {
     /// <summary>
     /// Provides a way of executing Commands over HTTP
     /// </summary>
-    internal class HttpCommandExecutor : ICommandExecutor
+    public class HttpCommandExecutor : ICommandExecutor
     {
         private const string JsonMimeType = "application/json";
         private const string PngMimeType = "image/png";
-        private const string CharsetType = "charset=utf-8";
-        private const string ContentTypeHeader = JsonMimeType + ";" + CharsetType;
+        private const string Utf8CharsetType = "utf-8";
         private const string RequestAcceptHeader = JsonMimeType + ", " + PngMimeType;
+        private const string UserAgentHeaderTemplate = "selenium/{0} (.net {1})";
         private Uri remoteServerUri;
         private TimeSpan serverResponseTimeout;
         private bool enableKeepAlive;
-        private CommandInfoRepository commandInfoRepository = new WebDriverWireProtocolCommandInfoRepository();
+        private bool isDisposed;
+        private IWebProxy proxy;
+        private CommandInfoRepository commandInfoRepository = new W3CWireProtocolCommandInfoRepository();
+        private HttpClient client;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="HttpCommandExecutor"/> class
@@ -72,26 +80,43 @@ namespace OpenQA.Selenium.Remote
             this.remoteServerUri = addressOfRemoteServer;
             this.serverResponseTimeout = timeout;
             this.enableKeepAlive = enableKeepAlive;
+        }
 
-            ServicePointManager.Expect100Continue = false;
-            ServicePointManager.DefaultConnectionLimit = 2000;
+        /// <summary>
+        /// Occurs when the <see cref="HttpCommandExecutor"/> is sending an HTTP
+        /// request to the remote end WebDriver implementation.
+        /// </summary>
+        public event EventHandler<SendingRemoteHttpRequestEventArgs> SendingRemoteHttpRequest;
 
-            // In the .NET Framework, HttpWebRequest responses with an error code are limited
-            // to 64k by default. Since the remote server error responses include a screenshot,
-            // they can frequently exceed this size. This only applies to the .NET Framework;
-            // Mono does not implement the property.
-            if (Type.GetType("Mono.Runtime", false, true) == null)
-            {
-                HttpWebRequest.DefaultMaximumErrorResponseLength = -1;
-            }
-    }
-
-    /// <summary>
-    /// Gets the repository of objects containin information about commands.
-    /// </summary>
-    public CommandInfoRepository CommandInfoRepository
+        /// <summary>
+        /// Gets the repository of objects containin information about commands.
+        /// </summary>
+        public CommandInfoRepository CommandInfoRepository
         {
             get { return this.commandInfoRepository; }
+            protected set { this.commandInfoRepository = value; }
+        }
+
+        /// <summary>
+        /// Gets or sets an <see cref="IWebProxy"/> object to be used to proxy requests
+        /// between this <see cref="HttpCommandExecutor"/> and the remote end WebDriver
+        /// implementation.
+        /// </summary>
+        public IWebProxy Proxy
+        {
+            get { return this.proxy; }
+            set { this.proxy = value; }
+        }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether keep-alive is enabled for HTTP
+        /// communication between this <see cref="HttpCommandExecutor"/> and the
+        /// remote end WebDriver implementation.
+        /// </summary>
+        public bool IsKeepAliveEnabled
+        {
+            get { return this.enableKeepAlive; }
+            set { this.enableKeepAlive = value; }
         }
 
         /// <summary>
@@ -107,150 +132,210 @@ namespace OpenQA.Selenium.Remote
             }
 
             CommandInfo info = this.commandInfoRepository.GetCommandInfo(commandToExecute.Name);
-            HttpRequestInfo requestInfo = new HttpRequestInfo(this.remoteServerUri, commandToExecute, info);
-
-            HttpResponseInfo responseInfo = this.MakeHttpRequest(requestInfo);
-
-            Response toReturn = this.CreateResponse(responseInfo);
-            if (commandToExecute.Name == DriverCommand.NewSession && toReturn.IsSpecificationCompliant)
+            if (info == null)
             {
-                // If we are creating a new session, sniff the response to determine
-                // what protocol level we are using. If the response contains a
-                // field called "status", it's not a spec-compliant response.
-                // Each response is polled for this, and sets a property describing
-                // whether it's using the W3C protocol dialect.
-                // TODO(jimevans): Reverse this test to make it the default path when
-                // most remote ends speak W3C, then remove it entirely when legacy
-                // protocol is phased out.
-                this.commandInfoRepository = new W3CWireProtocolCommandInfoRepository();
+                throw new NotImplementedException(string.Format("The command you are attempting to execute, {0}, does not exist in the protocol dialect used by the remote end.", commandToExecute.Name));
             }
 
+            if (this.client == null)
+            {
+                this.CreateHttpClient();
+            }
+
+            HttpRequestInfo requestInfo = new HttpRequestInfo(this.remoteServerUri, commandToExecute, info);
+            HttpResponseInfo responseInfo = null;
+            try
+            {
+                // Use TaskFactory to avoid deadlock in multithreaded implementations.
+                responseInfo = new TaskFactory(CancellationToken.None,
+                        TaskCreationOptions.None,
+                        TaskContinuationOptions.None,
+                        TaskScheduler.Default)
+                    .StartNew(() => this.MakeHttpRequest(requestInfo))
+                    .Unwrap()
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (HttpRequestException ex)
+            {
+                WebException innerWebException = ex.InnerException as WebException;
+                if (innerWebException != null)
+                {
+                    if (innerWebException.Status == WebExceptionStatus.Timeout)
+                    {
+                        string timeoutMessage = "The HTTP request to the remote WebDriver server for URL {0} timed out after {1} seconds.";
+                        throw new WebDriverException(string.Format(CultureInfo.InvariantCulture, timeoutMessage, requestInfo.FullUri.AbsoluteUri, this.serverResponseTimeout.TotalSeconds), ex);
+                    }
+                    else if (innerWebException.Status == WebExceptionStatus.ConnectFailure)
+                    {
+                        string connectFailureMessage = "Could not connect to the remote WebDriver server for URL {0}.";
+                        throw new WebDriverException(string.Format(CultureInfo.InvariantCulture, connectFailureMessage, requestInfo.FullUri.AbsoluteUri, this.serverResponseTimeout.TotalSeconds), ex);
+                    }
+                    else if (innerWebException.Response == null)
+                    {
+                        string nullResponseMessage = "A exception with a null response was thrown sending an HTTP request to the remote WebDriver server for URL {0}. The status of the exception was {1}, and the message was: {2}";
+                        throw new WebDriverException(string.Format(CultureInfo.InvariantCulture, nullResponseMessage, requestInfo.FullUri.AbsoluteUri, innerWebException.Status, innerWebException.Message), innerWebException);
+                    }
+                }
+
+                string unknownErrorMessage = "An unknown exception was encountered sending an HTTP request to the remote WebDriver server for URL {0}. The exception message was: {1}";
+                throw new WebDriverException(string.Format(CultureInfo.InvariantCulture, unknownErrorMessage, requestInfo.FullUri.AbsoluteUri, ex.Message), ex);
+            }
+            catch(TaskCanceledException ex)
+            {
+                string timeoutMessage = "The HTTP request to the remote WebDriver server for URL {0} timed out after {1} seconds.";
+                throw new WebDriverException(string.Format(CultureInfo.InvariantCulture, timeoutMessage, requestInfo.FullUri.AbsoluteUri, this.serverResponseTimeout.TotalSeconds), ex);
+            }
+
+            Response toReturn = this.CreateResponse(responseInfo);
             return toReturn;
         }
 
-        private static string GetTextOfWebResponse(HttpWebResponse webResponse)
+        /// <summary>
+        /// Raises the <see cref="SendingRemoteHttpRequest"/> event.
+        /// </summary>
+        /// <param name="eventArgs">A <see cref="SendingRemoteHttpRequestEventArgs"/> that contains the event data.</param>
+        protected virtual void OnSendingRemoteHttpRequest(SendingRemoteHttpRequestEventArgs eventArgs)
         {
-            // StreamReader.Close also closes the underlying stream.
-            Stream responseStream = webResponse.GetResponseStream();
-            StreamReader responseStreamReader = new StreamReader(responseStream, Encoding.UTF8);
-            string responseString = responseStreamReader.ReadToEnd();
-            responseStreamReader.Close();
-
-            // The response string from the Java remote server has trailing null
-            // characters. This is due to the fix for issue 288.
-            if (responseString.IndexOf('\0') >= 0)
+            if (eventArgs == null)
             {
-                responseString = responseString.Substring(0, responseString.IndexOf('\0'));
+                throw new ArgumentNullException("eventArgs", "eventArgs must not be null");
             }
 
-            return responseString;
+            if (this.SendingRemoteHttpRequest != null)
+            {
+                this.SendingRemoteHttpRequest(this, eventArgs);
+            }
         }
 
-        private HttpResponseInfo MakeHttpRequest(HttpRequestInfo requestInfo)
+        private void CreateHttpClient()
         {
-            HttpWebRequest request = HttpWebRequest.Create(requestInfo.FullUri) as HttpWebRequest;
-            request.Method = requestInfo.HttpMethod;
-            request.Timeout = (int)this.serverResponseTimeout.TotalMilliseconds;
-            request.Accept = RequestAcceptHeader;
-            request.KeepAlive = this.enableKeepAlive;
-            request.ServicePoint.ConnectionLimit = 2000;
-            if (request.Method == CommandInfo.PostCommand)
+            HttpClientHandler httpClientHandler = new HttpClientHandler();
+            string userInfo = this.remoteServerUri.UserInfo;
+            if (!string.IsNullOrEmpty(userInfo) && userInfo.Contains(":"))
             {
-                string payload = requestInfo.RequestBody;
-                byte[] data = Encoding.UTF8.GetBytes(payload);
-                request.ContentType = ContentTypeHeader;
-                Stream requestStream = request.GetRequestStream();
-                requestStream.Write(data, 0, data.Length);
-                requestStream.Close();
+                string[] userInfoComponents = this.remoteServerUri.UserInfo.Split(new char[] { ':' }, 2);
+                httpClientHandler.Credentials = new NetworkCredential(userInfoComponents[0], userInfoComponents[1]);
+                httpClientHandler.PreAuthenticate = true;
             }
 
-            HttpResponseInfo responseInfo = new HttpResponseInfo();
-            HttpWebResponse webResponse = null;
-            try
+            httpClientHandler.Proxy = this.Proxy;
+            // httpClientHandler.MaxConnectionsPerServer = 2000;
+
+            this.client = new HttpClient(httpClientHandler);
+            string userAgentString = string.Format(CultureInfo.InvariantCulture, UserAgentHeaderTemplate, ResourceUtilities.AssemblyVersion, ResourceUtilities.PlatformFamily);
+            this.client.DefaultRequestHeaders.UserAgent.ParseAdd(userAgentString);
+
+            this.client.DefaultRequestHeaders.Accept.ParseAdd(RequestAcceptHeader);
+            if (!this.IsKeepAliveEnabled)
             {
-                webResponse = request.GetResponse() as HttpWebResponse;
-            }
-            catch (WebException ex)
-            {
-                webResponse = ex.Response as HttpWebResponse;
-                if (ex.Status == WebExceptionStatus.Timeout)
-                {
-                    string timeoutMessage = "The HTTP request to the remote WebDriver server for URL {0} timed out after {1} seconds.";
-                    throw new WebDriverException(string.Format(CultureInfo.InvariantCulture, timeoutMessage, request.RequestUri.AbsoluteUri, this.serverResponseTimeout.TotalSeconds), ex);
-                }
-                else if (ex.Response == null)
-                {
-                    string nullResponseMessage = "A exception with a null response was thrown sending an HTTP request to the remote WebDriver server for URL {0}. The status of the exception was {1}, and the message was: {2}";
-                    throw new WebDriverException(string.Format(CultureInfo.InvariantCulture, nullResponseMessage, request.RequestUri.AbsoluteUri, ex.Status, ex.Message), ex);
-                }
+                this.client.DefaultRequestHeaders.Connection.ParseAdd("close");
             }
 
-            if (webResponse == null)
+            this.client.Timeout = this.serverResponseTimeout;
+        }
+
+        private async Task<HttpResponseInfo> MakeHttpRequest(HttpRequestInfo requestInfo)
+        {
+            SendingRemoteHttpRequestEventArgs eventArgs = new SendingRemoteHttpRequestEventArgs(null, requestInfo.RequestBody);
+            this.OnSendingRemoteHttpRequest(eventArgs);
+
+            HttpMethod method = new HttpMethod(requestInfo.HttpMethod);
+            HttpRequestMessage requestMessage = new HttpRequestMessage(method, requestInfo.FullUri);
+            if (requestInfo.HttpMethod == CommandInfo.GetCommand)
             {
-                throw new WebDriverException("No response from server for url " + request.RequestUri.AbsoluteUri);
+                CacheControlHeaderValue cacheControlHeader = new CacheControlHeaderValue();
+                cacheControlHeader.NoCache = true;
+                requestMessage.Headers.CacheControl = cacheControlHeader;
+            }
+
+            if (requestInfo.HttpMethod == CommandInfo.PostCommand)
+            {
+                MediaTypeWithQualityHeaderValue acceptHeader = new MediaTypeWithQualityHeaderValue(JsonMimeType);
+                acceptHeader.CharSet = Utf8CharsetType;
+                requestMessage.Headers.Accept.Add(acceptHeader);
+
+                byte[] bytes = Encoding.UTF8.GetBytes(eventArgs.RequestBody);
+                requestMessage.Content = new ByteArrayContent(bytes, 0, bytes.Length);
+            }
+
+            HttpResponseMessage responseMessage = await this.client.SendAsync(requestMessage);
+            HttpResponseInfo httpResponseInfo = new HttpResponseInfo();
+            httpResponseInfo.Body = await responseMessage.Content.ReadAsStringAsync();
+            httpResponseInfo.ContentType = responseMessage.Content.Headers.ContentType.ToString();
+            httpResponseInfo.StatusCode = responseMessage.StatusCode;
+            return httpResponseInfo;
+        }
+
+        private Response CreateResponse(HttpResponseInfo responseInfo)
+        {
+            Response response = new Response();
+            string body = responseInfo.Body;
+            if (responseInfo.ContentType != null && responseInfo.ContentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase))
+            {
+                response = Response.FromJson(body);
             }
             else
             {
-                responseInfo.Body = GetTextOfWebResponse(webResponse);
-                responseInfo.ContentType = webResponse.ContentType;
-                responseInfo.StatusCode = webResponse.StatusCode;
+                response.Value = body;
             }
 
-            return responseInfo;
-        }
-
-        private Response CreateResponse(HttpResponseInfo stuff)
-        {
-            Response commandResponse = new Response();
-            string responseString = stuff.Body;
-            if (stuff.ContentType != null && stuff.ContentType.StartsWith(JsonMimeType, StringComparison.OrdinalIgnoreCase))
+            if (this.CommandInfoRepository.SpecificationLevel < 1 && (responseInfo.StatusCode < HttpStatusCode.OK || responseInfo.StatusCode >= HttpStatusCode.BadRequest))
             {
-                commandResponse = Response.FromJson(responseString);
-            }
-            else
-            {
-                commandResponse.Value = responseString;
-            }
-
-            if (this.commandInfoRepository.SpecificationLevel < 1 && (stuff.StatusCode < HttpStatusCode.OK || stuff.StatusCode >= HttpStatusCode.BadRequest))
-            {
-                // 4xx represents an unknown command or a bad request.
-                if (stuff.StatusCode >= HttpStatusCode.BadRequest && stuff.StatusCode < HttpStatusCode.InternalServerError)
+                if (responseInfo.StatusCode >= HttpStatusCode.BadRequest && responseInfo.StatusCode < HttpStatusCode.InternalServerError)
                 {
-                    commandResponse.Status = WebDriverResult.UnhandledError;
+                    response.Status = WebDriverResult.UnhandledError;
                 }
-                else if (stuff.StatusCode >= HttpStatusCode.InternalServerError)
+                else if (responseInfo.StatusCode >= HttpStatusCode.InternalServerError)
                 {
-                    // 5xx represents an internal server error. The response status should already be set, but
-                    // if not, set it to a general error code. The exception is a 501 (NotImplemented) response,
-                    // which indicates that the command hasn't been implemented on the server.
-                    if (stuff.StatusCode == HttpStatusCode.NotImplemented)
+                    if (responseInfo.StatusCode == HttpStatusCode.NotImplemented)
                     {
-                        commandResponse.Status = WebDriverResult.UnknownCommand;
+                        response.Status = WebDriverResult.UnknownCommand;
                     }
-                    else
+                    else if (response.Status == WebDriverResult.Success)
                     {
-                        if (commandResponse.Status == WebDriverResult.Success)
-                        {
-                            commandResponse.Status = WebDriverResult.UnhandledError;
-                        }
+                        response.Status = WebDriverResult.UnhandledError;
                     }
                 }
                 else
                 {
-                    commandResponse.Status = WebDriverResult.UnhandledError;
+                    response.Status = WebDriverResult.UnhandledError;
                 }
             }
 
-            if (commandResponse.Value is string)
+            if (response.Value is string)
             {
-                // First, collapse all \r\n pairs to \n, then replace all \n with
-                // System.Environment.NewLine. This ensures the consistency of
-                // the values.
-                commandResponse.Value = ((string)commandResponse.Value).Replace("\r\n", "\n").Replace("\n", System.Environment.NewLine);
+                response.Value = ((string)response.Value).Replace("\r\n", "\n").Replace("\n", Environment.NewLine);
             }
 
-            return commandResponse;
+            return response;
+        }
+
+        /// <summary>
+        /// Releases all resources used by the <see cref="HttpCommandExecutor"/>.
+        /// </summary>
+        public void Dispose()
+        {
+            this.Dispose(true);
+        }
+
+        /// <summary>
+        /// Releases the unmanaged resources used by the <see cref="HttpCommandExecutor"/> and
+        /// optionally releases the managed resources.
+        /// </summary>
+        /// <param name="disposing"><see langword="true"/> to release managed and resources;
+        /// <see langword="false"/> to only release unmanaged resources.</param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!this.isDisposed)
+            {
+                if (this.client != null)
+                {
+                    this.client.Dispose();
+                }
+
+                this.isDisposed = true;
+            }
         }
 
         private class HttpRequestInfo

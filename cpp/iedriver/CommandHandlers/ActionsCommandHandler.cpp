@@ -49,9 +49,17 @@ void ActionsCommandHandler::ExecuteInternal(
     response->SetErrorResponse(ERROR_INVALID_ARGUMENT, "Actions value is not an array");
     return;
   }
-  status_code = executor.input_manager()->PerformInputSequence(browser_wrapper, actions_parameter_iterator->second);
+  std::string error_info = "";
+  status_code = executor.input_manager()->PerformInputSequence(browser_wrapper,
+                                                               actions_parameter_iterator->second,
+                                                               &error_info);
   if (status_code != WD_SUCCESS) {
-    response->SetErrorResponse(status_code, "Unexpected error performing action sequence.");
+    if (status_code == EMOVETARGETOUTOFBOUNDS) {
+      response->SetErrorResponse(status_code, error_info);
+    } else {
+      response->SetErrorResponse(status_code, "Unexpected error performing action sequence.");
+    }
+    return;
   }
   response->SetSuccessResponse(Json::Value::null);
 }

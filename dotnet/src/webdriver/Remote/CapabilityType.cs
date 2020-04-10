@@ -16,6 +16,8 @@
 // limitations under the License.
 // </copyright>
 
+using System.Collections.Generic;
+
 namespace OpenQA.Selenium.Remote
 {
     /// <summary>
@@ -137,5 +139,50 @@ namespace OpenQA.Selenium.Remote
         /// Capability name used to indicate whether the driver supports web storage.
         /// </summary>
         public static readonly string SupportsWebStorage = "webStorageEnabled";
+
+        /// <summary>
+        /// Capability name used to indicate whether the driver supports setting the browser window's size and position.
+        /// </summary>
+        public static readonly string SetWindowRect = "setWindowRect";
+        
+        /// <summary>
+        /// Capability name used to get or set timeout values when creating a session.
+        /// </summary>
+        public static readonly string Timeouts = "timeouts";
+
+        /// <summary>
+        /// Capability name used to get or set whether &lt;input type='file'/&gt; elements must be visible to upload files.
+        /// </summary>
+        public static readonly string UseStrictFileInteractability = "strictFileInteractability";
+
+        private static readonly List<string> KnownSpecCompliantCapabilityNames = new List<string>() {
+            BrowserName,
+            BrowserVersion,
+            PlatformName,
+            AcceptInsecureCertificates,
+            PageLoadStrategy,
+            Proxy,
+            SetWindowRect,
+            Timeouts,
+            UnhandledPromptBehavior,
+            UseStrictFileInteractability
+        };
+
+        /// <summary>
+        /// Gets a value indicating whether a given capability name is compliant with the
+        /// W3C WebDriver Specification.
+        /// </summary>
+        /// <param name="capabilityName">The name of the capability to check for compliance.</param>
+        /// <returns><see langword="true"/> if the capability name is valid according to the rules
+        /// of the specification; otherwise, <see langword="false"/>.</returns>
+        public static bool IsSpecCompliantCapabilityName(string capabilityName)
+        {
+            if (KnownSpecCompliantCapabilityNames.Contains(capabilityName) || capabilityName.Contains(":"))
+            {
+                return true;
+            }
+
+            return false;
+        }
     }
 }

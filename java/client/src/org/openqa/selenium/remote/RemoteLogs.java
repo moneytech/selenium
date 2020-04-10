@@ -20,7 +20,6 @@ package org.openqa.selenium.remote;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 
 import org.openqa.selenium.Beta;
 import org.openqa.selenium.UnsupportedCommandException;
@@ -58,6 +57,7 @@ public class RemoteLogs implements Logs {
     this.localLogs = localLogs;
   }
 
+  @Override
   public LogEntries get(String logType) {
     if (LogType.PROFILER.equals(logType)) {
       LogEntries remoteEntries = new LogEntries(new ArrayList<>());
@@ -85,7 +85,7 @@ public class RemoteLogs implements Logs {
     }
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> rawList = (List<Map<String, Object>>) raw;
-    List<LogEntry> remoteEntries = Lists.newArrayListWithCapacity(rawList.size());
+    List<LogEntry> remoteEntries = new ArrayList<>(rawList.size());
 
     for (Map<String, Object> obj : rawList) {
       remoteEntries.add(new LogEntry(LogLevelMapping.toLevel((String)obj.get(LEVEL)),
@@ -103,6 +103,7 @@ public class RemoteLogs implements Logs {
     return localLogs.getAvailableLogTypes();
   }
 
+  @Override
   public Set<String> getAvailableLogTypes() {
     Object raw = executeMethod.execute(DriverCommand.GET_AVAILABLE_LOG_TYPES, null);
     @SuppressWarnings("unchecked")

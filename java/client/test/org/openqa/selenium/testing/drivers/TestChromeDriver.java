@@ -19,14 +19,13 @@ package org.openqa.selenium.testing.drivers;
 
 import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.OutputType;
+import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeDriverService;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.remote.DriverCommand;
-import org.openqa.selenium.remote.RemoteWebDriver;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -38,45 +37,31 @@ import java.util.logging.Logger;
  * entire test suite. We do not use {@link org.openqa.selenium.chrome.ChromeDriver} since that starts and stops the service
  * with each instance (and that is too expensive for our purposes).
  */
-public class TestChromeDriver extends RemoteWebDriver {
+public class TestChromeDriver extends ChromeDriver {
   private final static Logger LOG = Logger.getLogger(TestChromeDriver.class.getName());
 
-  private static ChromeDriverService service;
-
-  public TestChromeDriver() {
-    super(chromeWithCustomCapabilities(null));
+  public TestChromeDriver(Capabilities capabilities) {
+    super(getService(), chromeWithCustomCapabilities(capabilities));
   }
 
-  public TestChromeDriver(Capabilities capabilities) throws IOException {
-    super(getServiceUrl(), chromeWithCustomCapabilities(capabilities));
-  }
-
-  private static URL getServiceUrl() throws IOException {
-    if (service == null && !SauceDriver.shouldUseSauce()) {
+  private static ChromeDriverService getService() {
+    try {
       Path logFile = Files.createTempFile("chromedriver", ".log");
-      service = new ChromeDriverService.Builder()
+      ChromeDriverService service = new ChromeDriverService.Builder()
           .withVerbose(true)
           .withLogFile(logFile.toFile())
           .build();
       LOG.info("chromedriver will log to " + logFile);
-      try {
-        service.start();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-
+      service.start();
       // Fugly.
-      Runtime.getRuntime().addShutdownHook(new Thread() {
-        @Override
-        public void run() {
-          service.stop();
-        }
-      });
+      Runtime.getRuntime().addShutdownHook(new Thread(service::stop));
+      return service;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
-    return service.getUrl();
   }
 
-  private static Capabilities chromeWithCustomCapabilities(Capabilities originalCapabilities) {
+  private static ChromeOptions chromeWithCustomCapabilities(Capabilities originalCapabilities) {
     ChromeOptions options = new ChromeOptions();
     options.addArguments("disable-extensions", "disable-infobars", "disable-breakpad");
     Map<String, Object> prefs = new HashMap<>();
@@ -95,11 +80,11 @@ public class TestChromeDriver extends RemoteWebDriver {
     return options;
   }
 
+  @Override
   public <X> X getScreenshotAs(OutputType<X> target) {
     // Get the screenshot as base64.
     String base64 = (String) execute(DriverCommand.SCREENSHOT).getValue();
     // ... and convert it.
     return target.convertFromBase64Png(base64);
   }
-
 }

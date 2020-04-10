@@ -17,23 +17,21 @@
 
 package org.openqa.selenium;
 
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.junit.Assume.assumeFalse;
 import static org.openqa.selenium.WaitingConditions.newWindowIsOpened;
 import static org.openqa.selenium.support.ui.ExpectedConditions.alertIsPresent;
 import static org.openqa.selenium.support.ui.ExpectedConditions.presenceOfElementLocated;
 import static org.openqa.selenium.support.ui.ExpectedConditions.titleIs;
-import static org.openqa.selenium.testing.Driver.CHROME;
-import static org.openqa.selenium.testing.Driver.FIREFOX;
-import static org.openqa.selenium.testing.Driver.HTMLUNIT;
-import static org.openqa.selenium.testing.Driver.IE;
-import static org.openqa.selenium.testing.Driver.MARIONETTE;
-import static org.openqa.selenium.testing.Driver.SAFARI;
-import static org.openqa.selenium.testing.TestUtilities.catchThrowable;
+import static org.openqa.selenium.testing.drivers.Browser.CHROME;
+import static org.openqa.selenium.testing.drivers.Browser.CHROMIUMEDGE;
+import static org.openqa.selenium.testing.drivers.Browser.EDGE;
+import static org.openqa.selenium.testing.drivers.Browser.FIREFOX;
+import static org.openqa.selenium.testing.drivers.Browser.HTMLUNIT;
+import static org.openqa.selenium.testing.drivers.Browser.IE;
+import static org.openqa.selenium.testing.drivers.Browser.MARIONETTE;
+import static org.openqa.selenium.testing.drivers.Browser.SAFARI;
 import static org.openqa.selenium.testing.TestUtilities.getFirefoxVersion;
 import static org.openqa.selenium.testing.TestUtilities.isFirefox;
 
@@ -43,15 +41,12 @@ import org.openqa.selenium.environment.webserver.Page;
 import org.openqa.selenium.support.ui.ExpectedCondition;
 import org.openqa.selenium.testing.Ignore;
 import org.openqa.selenium.testing.JUnit4TestBase;
-import org.openqa.selenium.testing.NeedsLocalEnvironment;
 import org.openqa.selenium.testing.NoDriverAfterTest;
 import org.openqa.selenium.testing.NotYetImplemented;
 import org.openqa.selenium.testing.SwitchToTopAfterTest;
 
 import java.util.Set;
 
-@Ignore(value = CHROME, reason = "https://bugs.chromium.org/p/chromedriver/issues/detail?id=1500")
-@Ignore(SAFARI)
 public class AlertsTest extends JUnit4TestBase {
 
   @After
@@ -84,7 +79,6 @@ public class AlertsTest extends JUnit4TestBase {
             "<div id='text'>acceptor</div>"));
   }
 
-  @NoDriverAfterTest
   @Test
   public void testShouldBeAbleToOverrideTheWindowAlertMethod() {
     driver.get(alertPage("cheese"));
@@ -94,7 +88,7 @@ public class AlertsTest extends JUnit4TestBase {
     driver.findElement(By.id("alert")).click();
 
     // If we can perform any action, we're good to go
-    assertEquals("Testing Alerts", driver.getTitle());
+    assertThat(driver.getTitle()).isEqualTo("Testing Alerts");
   }
 
   @Test
@@ -106,7 +100,7 @@ public class AlertsTest extends JUnit4TestBase {
     alert.accept();
 
     // If we can perform any action, we're good to go
-    assertEquals("Testing Alerts", driver.getTitle());
+    assertThat(driver.getTitle()).isEqualTo("Testing Alerts");
   }
 
   @Test
@@ -115,12 +109,9 @@ public class AlertsTest extends JUnit4TestBase {
 
     driver.findElement(By.id("alert")).click();
     Alert alert = wait.until(alertIsPresent());
-    try {
-      Throwable t = catchThrowable(() -> alert.sendKeys(null));
-      assertThat(t, instanceOf(IllegalArgumentException.class));
-    } finally {
-      alert.accept();
-    }
+
+    assertThatExceptionOfType(IllegalArgumentException.class)
+        .isThrownBy(() -> alert.sendKeys(null));
   }
 
   @Test
@@ -132,14 +123,11 @@ public class AlertsTest extends JUnit4TestBase {
     alert.accept();
 
     // If we can perform any action, we're good to go
-    assertEquals("Testing Alerts", driver.getTitle());
+    assertThat(driver.getTitle()).isEqualTo("Testing Alerts");
   }
 
-  @NeedsLocalEnvironment(reason = "Carefully timing based")
   @Test
-  @Ignore(CHROME)
-  @Ignore(MARIONETTE)
-  public void testShouldGetTextOfAlertOpenedInSetTimeout() throws Exception {
+  public void testShouldGetTextOfAlertOpenedInSetTimeout() {
     driver.get(appServer.create(new Page()
         .withTitle("Testing Alerts")
         .withScripts(
@@ -148,16 +136,9 @@ public class AlertsTest extends JUnit4TestBase {
             "<a href='#' id='slow-alert' onclick='slowAlert();'>click me</a>")));
 
     driver.findElement(By.id("slow-alert")).click();
+    Alert alert = wait.until(alertIsPresent());
 
-    // DO NOT WAIT OR SLEEP HERE.
-    // This is a regression test for a bug where only the first switchTo call would throw,
-    // and only if it happens before the alert actually loads.
-    Alert alert = driver.switchTo().alert();
-    try {
-      assertEquals("Slow", alert.getText());
-    } finally {
-      alert.accept();
-    }
+    assertThat(alert.getText()).isEqualTo("Slow");
   }
 
   @Test
@@ -169,7 +150,7 @@ public class AlertsTest extends JUnit4TestBase {
     alert.dismiss();
 
     // If we can perform any action, we're good to go
-    assertEquals("Testing Alerts", driver.getTitle());
+    assertThat(driver.getTitle()).isEqualTo("Testing Alerts");
   }
 
   @Test
@@ -181,7 +162,7 @@ public class AlertsTest extends JUnit4TestBase {
     alert.accept();
 
     // If we can perform any action, we're good to go
-    assertEquals("Testing Prompt", driver.getTitle());
+    assertThat(driver.getTitle()).isEqualTo("Testing Prompt");
   }
 
   @Test
@@ -193,7 +174,7 @@ public class AlertsTest extends JUnit4TestBase {
     alert.dismiss();
 
     // If we can perform any action, we're good to go
-    assertEquals("Testing Prompt", driver.getTitle());
+    assertThat(driver.getTitle()).isEqualTo("Testing Prompt");
   }
 
   @Test
@@ -209,19 +190,14 @@ public class AlertsTest extends JUnit4TestBase {
   }
 
   @Test
-  @Ignore(CHROME)
   public void testSettingTheValueOfAnAlertThrows() {
     driver.get(alertPage("cheese"));
 
     driver.findElement(By.id("alert")).click();
 
     Alert alert = wait.until(alertIsPresent());
-    try {
-      Throwable t = catchThrowable(() -> alert.sendKeys("cheese"));
-      assertThat(t, instanceOf(ElementNotInteractableException.class));
-    } finally {
-      alert.accept();
-    }
+    assertThatExceptionOfType(ElementNotInteractableException.class)
+        .isThrownBy(() -> alert.sendKeys("cheese"));
   }
 
   @Test
@@ -233,7 +209,7 @@ public class AlertsTest extends JUnit4TestBase {
     String value = alert.getText();
     alert.accept();
 
-    assertEquals("cheese", value);
+    assertThat(value).isEqualTo("cheese");
   }
 
   @Test
@@ -245,7 +221,7 @@ public class AlertsTest extends JUnit4TestBase {
     String value = alert.getText();
     alert.accept();
 
-    assertEquals("Enter something", value);
+    assertThat(value).isEqualTo("Enter something");
   }
 
   @Test
@@ -256,8 +232,8 @@ public class AlertsTest extends JUnit4TestBase {
     Alert alert = wait.until(alertIsPresent());
     alert.accept();
 
-    Throwable t = catchThrowable(alert::getText);
-    assertThat(t, instanceOf(NoAlertPresentException.class));
+    assertThatExceptionOfType(NoAlertPresentException.class)
+        .isThrownBy(alert::getText);
   }
 
   @SwitchToTopAfterTest
@@ -275,7 +251,7 @@ public class AlertsTest extends JUnit4TestBase {
     alert.accept();
 
     // If we can perform any action, we're good to go
-    assertEquals("Testing Alerts", driver.getTitle());
+    assertThat(driver.getTitle()).isEqualTo("Testing Alerts");
   }
 
   @SwitchToTopAfterTest
@@ -296,19 +272,19 @@ public class AlertsTest extends JUnit4TestBase {
     alert.accept();
 
     // If we can perform any action, we're good to go
-    assertEquals("Testing Alerts", driver.getTitle());
+    assertThat(driver.getTitle()).isEqualTo("Testing Alerts");
   }
 
   @Test
-  public void testSwitchingToMissingAlertThrows() throws Exception {
+  public void testSwitchingToMissingAlertThrows() {
     driver.get(alertPage("cheese"));
 
-    Throwable t = catchThrowable(() -> driver.switchTo().alert());
-    assertThat(t, instanceOf(NoAlertPresentException.class));
+    assertThatExceptionOfType(NoAlertPresentException.class)
+        .isThrownBy(() -> driver.switchTo().alert());
   }
 
   @Test
-  public void testSwitchingToMissingAlertInAClosedWindowThrows() throws Exception {
+  public void testSwitchingToMissingAlertInAClosedWindowThrows() {
     String blank = appServer.create(new Page());
     driver.get(appServer.create(new Page()
         .withBody(String.format(
@@ -320,8 +296,8 @@ public class AlertsTest extends JUnit4TestBase {
       wait.until(ableToSwitchToWindow("newwindow"));
       driver.close();
 
-      Throwable t = catchThrowable(() -> driver.switchTo().alert());
-      assertThat(t, instanceOf(NoSuchWindowException.class));
+      assertThatExceptionOfType(NoSuchWindowException.class)
+          .isThrownBy(() -> driver.switchTo().alert());
 
     } finally {
       driver.switchTo().window(mainWindow);
@@ -332,7 +308,7 @@ public class AlertsTest extends JUnit4TestBase {
   public void testPromptShouldUseDefaultValueIfNoKeysSent() {
     driver.get(promptPage("This is a default value"));
 
-    driver.findElement(By.id("prompt")).click();
+    wait.until(presenceOfElementLocated(By.id("prompt"))).click();
     Alert alert = wait.until(alertIsPresent());
     alert.accept();
 
@@ -380,7 +356,6 @@ public class AlertsTest extends JUnit4TestBase {
   }
 
   @Test
-  @Ignore(CHROME)
   public void testShouldHandleAlertOnPageLoad() {
     String pageWithOnLoad = appServer.create(new Page()
         .withOnLoad("javascript:alert(\"onload\")")
@@ -393,12 +368,11 @@ public class AlertsTest extends JUnit4TestBase {
     String value = alert.getText();
     alert.accept();
 
-    assertEquals("onload", value);
+    assertThat(value).isEqualTo("onload");
     wait.until(textInElementLocated(By.tagName("p"), "Page with onload event handler"));
   }
 
   @Test
-  @Ignore(CHROME)
   public void testShouldHandleAlertOnPageLoadUsingGet() {
     driver.get(appServer.create(new Page()
         .withOnLoad("javascript:alert(\"onload\")")
@@ -408,14 +382,18 @@ public class AlertsTest extends JUnit4TestBase {
     String value = alert.getText();
     alert.accept();
 
-    assertEquals("onload", value);
+    assertThat(value).isEqualTo("onload");
     wait.until(textInElementLocated(By.tagName("p"), "Page with onload event handler"));
   }
 
   @Test
-  @Ignore(CHROME)
+  @Ignore(value = CHROME, reason = "Hangs")
+  @Ignore(value = CHROMIUMEDGE, reason = "Hangs")
   @Ignore(FIREFOX)
   @Ignore(value = IE, reason = "Fails in versions 6 and 7")
+  @Ignore(SAFARI)
+  @Ignore(EDGE)
+  @NoDriverAfterTest
   public void testShouldNotHandleAlertInAnotherWindow() {
     String pageWithOnLoad = appServer.create(new Page()
         .withOnLoad("javascript:alert(\"onload\")")
@@ -426,31 +404,25 @@ public class AlertsTest extends JUnit4TestBase {
 
     String mainWindow = driver.getWindowHandle();
     Set<String> currentWindowHandles = driver.getWindowHandles();
-    try {
-      driver.findElement(By.id("open-new-window")).click();
-      wait.until(newWindowIsOpened(currentWindowHandles));
+    driver.findElement(By.id("open-new-window")).click();
+    wait.until(newWindowIsOpened(currentWindowHandles));
 
-      Throwable t = catchThrowable(() -> wait.until(alertIsPresent()));
-      assertThat(t, instanceOf(TimeoutException.class));
-
-    } finally {
-      driver.switchTo().window("newwindow");
-      wait.until(alertIsPresent()).dismiss();
-      driver.close();
-      driver.switchTo().window(mainWindow);
-      wait.until(textInElementLocated(By.id("open-new-window"), "open new window"));
-    }
+    assertThatExceptionOfType(TimeoutException.class)
+        .isThrownBy(() -> wait.until(alertIsPresent()));
   }
 
   @Test
   @Ignore(value = CHROME, reason = "Chrome does not trigger alerts on unload")
+  @Ignore(value = CHROMIUMEDGE, reason = "Edge does not trigger alerts on unload")
   @NotYetImplemented(HTMLUNIT)
+  @Ignore(SAFARI)
+  @NotYetImplemented(EDGE)
   public void testShouldHandleAlertOnPageUnload() {
-    assumeFalse("Firefox 27 does not trigger alerts on before unload",
+    assumeFalse("Firefox 27+ does not trigger alerts on before unload",
                 isFirefox(driver) && getFirefoxVersion(driver) >= 27);
 
     String pageWithOnBeforeUnload = appServer.create(new Page()
-        .withOnBeforeUnload("javascript:alert(\"onbeforeunload\")")
+        .withOnBeforeUnload("return \"onbeforeunload\"")
         .withBody("<p>Page with onbeforeunload event handler</p>"));
     driver.get(appServer.create(new Page()
         .withBody(String.format("<a id='link' href='%s'>open new page</a>", pageWithOnBeforeUnload))));
@@ -462,12 +434,17 @@ public class AlertsTest extends JUnit4TestBase {
     String value = alert.getText();
     alert.accept();
 
-    assertEquals("onbeforeunload", value);
+    assertThat(value).isEqualTo("onbeforeunload");
     wait.until(textInElementLocated(By.id("link"), "open new page"));
   }
 
   @Test
-  public void testShouldHandleAlertOnPageBeforeUnload() {
+  @Ignore(value = FIREFOX, reason = "Non W3C conformant")
+  @Ignore(value = HTMLUNIT, reason = "Non W3C conformant")
+  @Ignore(value = CHROME, reason = "Non W3C conformant")
+  @Ignore(value = CHROMIUMEDGE, reason = "Non W3C conformant")
+  @Ignore(EDGE)
+  public void testShouldImplicitlyHandleAlertOnPageBeforeUnload() {
     String blank = appServer.create(new Page().withTitle("Success"));
     driver.get(appServer.create(new Page()
         .withTitle("Page with onbeforeunload handler")
@@ -476,46 +453,23 @@ public class AlertsTest extends JUnit4TestBase {
 
     setSimpleOnBeforeUnload("onbeforeunload message");
 
-    WebElement element = driver.findElement(By.id("link"));
-    element.click();
-
-    Alert alert = wait.until(alertIsPresent());
-    alert.dismiss();
-    assertThat(driver.getTitle(), is("Page with onbeforeunload handler"));
-
-    element.click();
-    alert = wait.until(alertIsPresent());
-    alert.accept();
+    driver.findElement(By.id("link")).click();
     wait.until(titleIs("Success"));
-  }
-
-  @NoDriverAfterTest
-  @Test
-  public void testShouldHandleAlertOnPageBeforeUnloadAtQuit() {
-    String blank = appServer.create(new Page().withTitle("Success"));
-    driver.get(appServer.create(new Page()
-        .withTitle("Page with onbeforeunload handler")
-        .withBody(String.format(
-            "<a id='link' href='%s'>Click here to navigate to another page.</a>", blank))));
-
-    setSimpleOnBeforeUnload("onbeforeunload message");
-
-    WebElement element = driver.findElement(By.id("link"));
-    element.click();
-    wait.until(alertIsPresent());
-
-    driver.quit();
   }
 
   @Test
   @Ignore(value = CHROME, reason = "Chrome does not trigger alerts on unload")
+  @Ignore(value = CHROMIUMEDGE, reason = "Chrome does not trigger alerts on unload")
   @NotYetImplemented(HTMLUNIT)
+  @Ignore(SAFARI)
+  @Ignore(value = IE, reason = "IE driver automatically dismisses alerts on window close")
+  @NotYetImplemented(EDGE)
   public void testShouldHandleAlertOnWindowClose() {
-    assumeFalse("Firefox 27 does not trigger alerts on unload",
+    assumeFalse("Firefox 27+ does not trigger alerts on unload",
         isFirefox(driver) && getFirefoxVersion(driver) >= 27);
 
     String pageWithOnBeforeUnload = appServer.create(new Page()
-        .withOnBeforeUnload("javascript:alert(\"onbeforeunload\")")
+        .withOnBeforeUnload("return \"onbeforeunload\"")
         .withBody("<p>Page with onbeforeunload event handler</p>"));
     driver.get(appServer.create(new Page()
         .withBody(String.format(
@@ -531,7 +485,7 @@ public class AlertsTest extends JUnit4TestBase {
       String value = alert.getText();
       alert.accept();
 
-      assertEquals("onbeforeunload", value);
+      assertThat(value).isEqualTo("onbeforeunload");
 
     } finally {
       driver.switchTo().window(mainWindow);
@@ -540,20 +494,20 @@ public class AlertsTest extends JUnit4TestBase {
   }
 
   @Test
-  @Ignore(CHROME)
   @Ignore(value = HTMLUNIT, reason = "https://github.com/SeleniumHQ/htmlunit-driver/issues/57")
   @NotYetImplemented(value = MARIONETTE,
       reason = "https://bugzilla.mozilla.org/show_bug.cgi?id=1279211")
+  @NotYetImplemented(EDGE)
   public void testIncludesAlertTextInUnhandledAlertException() {
     driver.get(alertPage("cheese"));
 
     driver.findElement(By.id("alert")).click();
     wait.until(alertIsPresent());
 
-    Throwable t = catchThrowable(driver::getTitle);
-    assertThat(t, instanceOf(UnhandledAlertException.class));
-    assertThat(((UnhandledAlertException) t).getAlertText(), is("cheese"));
-    assertThat(t.getMessage(), containsString("cheese"));
+    assertThatExceptionOfType(UnhandledAlertException.class)
+        .isThrownBy(driver::getTitle)
+        .withMessageContaining("cheese")
+        .satisfies(ex -> assertThat(ex.getAlertText()).isEqualTo("cheese"));
   }
 
   @NoDriverAfterTest
@@ -579,8 +533,8 @@ public class AlertsTest extends JUnit4TestBase {
     String value = alert.getText();
     alert.accept();
 
-    assertEquals("Tasty cheese", value);
-    assertEquals("Testing Alerts", driver.getTitle());
+    assertThat(value).isEqualTo("Tasty cheese");
+    assertThat(driver.getTitle()).isEqualTo("Testing Alerts");
   }
 
   private static ExpectedCondition<Boolean> textInElementLocated(

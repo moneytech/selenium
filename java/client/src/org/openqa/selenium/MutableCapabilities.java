@@ -17,7 +17,6 @@
 
 package org.openqa.selenium;
 
-
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashSet;
@@ -58,12 +57,12 @@ public class MutableCapabilities extends AbstractCapabilities implements Seriali
   }
 
   /**
-   * Merges the extra capabilities provided into this DesiredCapabilities instance. If capabilities
+   * Merge the extra capabilities provided into this DesiredCapabilities instance. If capabilities
    * with the same name exist in this instance, they will be overridden by the values from the
    * extraCapabilities object.
    *
    * @param extraCapabilities Additional capabilities to be added.
-   * @return DesiredCapabilities after the merge
+   * @return The DesiredCapabilities instance after the merge.
    */
   @Override
   public MutableCapabilities merge(Capabilities extraCapabilities) {
@@ -88,9 +87,10 @@ public class MutableCapabilities extends AbstractCapabilities implements Seriali
     setCapability(capabilityName, (Object) value);
   }
 
+  @Override
   public void setCapability(String key, Object value) {
     // We have to special-case some keys and values because of the popular idiom of calling
-    // something like "capabilities.setCapability(SafariOptions.CAPABILITY, new SafariOptions());
+    // something like "capabilities.setCapability(SafariOptions.CAPABILITY, new SafariOptions());"
     // and this is no longer needed as options are capabilities. There will be a large amount of
     // legacy code that will always try and follow this pattern, however.
     if (OPTION_KEYS.contains(key) && value instanceof Capabilities) {

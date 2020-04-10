@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -20,14 +22,13 @@ require_relative 'spec_helper'
 module Selenium
   module WebDriver
     module DriverExtensions
-      describe HasWebStorage, only: {browser: %i[chrome firefox]} do
+      describe HasWebStorage, only: {browser: %i[edge edge_chrome chrome ie firefox safari]} do
         shared_examples 'web storage' do
           before do
             driver.navigate.to url_for('clicks.html')
             storage.clear
           end
 
-          # https://bugs.chromium.org/p/chromedriver/issues/detail?id=2177 - To monitor as recently fixed
           it 'can get and set items' do
             expect(storage).to be_empty
             storage['foo'] = 'bar'
@@ -49,7 +50,6 @@ module Selenium
             expect(storage.keys).to include('foo1', 'foo2', 'foo3')
           end
 
-          # https://bugs.chromium.org/p/chromedriver/issues/detail?id=2177 - To monitor as recently fixed
           it 'can clear all items' do
             storage['foo1'] = 'bar1'
             storage['foo2'] = 'bar2'
@@ -95,19 +95,21 @@ module Selenium
           end
 
           it 'raises IndexError on missing key' do
-            expect do
+            expect {
               storage.fetch('no-such-key')
-            end.to raise_error(IndexError, /missing key/)
+            }.to raise_error(IndexError, /missing key/)
           end
         end
 
         context 'local storage' do
           let(:storage) { driver.local_storage }
+
           it_behaves_like 'web storage'
         end
 
         context 'session storage' do
           let(:storage) { driver.session_storage }
+
           it_behaves_like 'web storage'
         end
       end

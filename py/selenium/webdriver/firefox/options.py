@@ -15,9 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 from selenium.common.exceptions import InvalidArgumentException
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.proxy import Proxy
 from selenium.webdriver.firefox.firefox_binary import FirefoxBinary
 from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
+from selenium.webdriver.common.options import ArgOptions
 
 
 class Log(object):
@@ -30,15 +32,15 @@ class Log(object):
         return {}
 
 
-class Options(object):
+class Options(ArgOptions):
     KEY = "moz:firefoxOptions"
 
     def __init__(self):
+        super(Options, self).__init__()
         self._binary = None
         self._preferences = {}
         self._profile = None
         self._proxy = None
-        self._arguments = []
         self.log = Log()
 
     @property
@@ -58,7 +60,9 @@ class Options(object):
 
     @property
     def binary_location(self):
-        """Returns the location of the binary."""
+        """
+        :Returns: The location of the binary.
+        """
         return self.binary._start_cmd
 
     @binary_location.setter  # noqa
@@ -67,8 +71,16 @@ class Options(object):
         self.binary = value
 
     @property
+    def accept_insecure_certs(self):
+        return self._caps.get('acceptInsecureCerts')
+
+    @accept_insecure_certs.setter
+    def accept_insecure_certs(self, value):
+        self._caps['acceptInsecureCerts'] = value
+
+    @property
     def preferences(self):
-        """Returns a dict of preferences."""
+        """:Returns: A dict of preferences."""
         return self._preferences
 
     def set_preference(self, name, value):
@@ -77,7 +89,9 @@ class Options(object):
 
     @property
     def proxy(self):
-        """ returns Proxy if set otherwise None."""
+        """
+        :Returns: Proxy if set, otherwise None.
+        """
         return self._proxy
 
     @proxy.setter
@@ -88,7 +102,9 @@ class Options(object):
 
     @property
     def profile(self):
-        """Returns the Firefox profile to use."""
+        """
+        :Returns: The Firefox profile to use.
+        """
         return self._profile
 
     @profile.setter
@@ -102,44 +118,45 @@ class Options(object):
         self._profile = new_profile
 
     @property
-    def arguments(self):
-        """Returns a list of browser process arguments."""
-        return self._arguments
-
-    def add_argument(self, argument):
-        """Add argument to be used for the browser process."""
-        if argument is None:
-            raise ValueError()
-        self._arguments.append(argument)
-
-    @property
     def headless(self):
         """
-        Returns whether or not the headless argument is set
+        :Returns: True if the headless argument is set, else False
         """
         return '-headless' in self._arguments
 
-    def set_headless(self, headless=True):
+    @headless.setter
+    def headless(self, value):
         """
         Sets the headless argument
 
         Args:
-          headless: boolean value indicating to set the headless option
+          value: boolean value indicating to set the headless option
         """
-        if headless:
+        if value is True:
             self._arguments.append('-headless')
         elif '-headless' in self._arguments:
             self._arguments.remove('-headless')
 
+    @property
+    def page_load_strategy(self):
+        return self._caps["pageLoadStrategy"]
+
+    @page_load_strategy.setter
+    def page_load_strategy(self, strategy):
+        if strategy in ["normal", "eager", "none"]:
+            self.set_capability("pageLoadStrategy", strategy)
+        else:
+            raise ValueError("Strategy can only be one of the following: normal, eager, none")
+
     def to_capabilities(self):
         """Marshals the Firefox options to a `moz:firefoxOptions`
         object.
-
         """
         # This intentionally looks at the internal properties
         # so if a binary or profile has _not_ been set,
         # it will defer to geckodriver to find the system Firefox
         # and generate a fresh profile.
+        caps = self._caps
         opts = {}
 
         if self._binary is not None:
@@ -147,7 +164,7 @@ class Options(object):
         if len(self._preferences) > 0:
             opts["prefs"] = self._preferences
         if self._proxy is not None:
-            self._proxy.add_to_capabilities(opts)
+            self._proxy.add_to_capabilities(caps)
         if self._profile is not None:
             opts["profile"] = self._profile.encoded
         if len(self._arguments) > 0:
@@ -156,5 +173,10 @@ class Options(object):
         opts.update(self.log.to_capabilities())
 
         if len(opts) > 0:
-            return {Options.KEY: opts}
-        return {}
+            caps[Options.KEY] = opts
+
+        return caps
+
+    @property
+    def default_capabilities(self):
+        return DesiredCapabilities.FIREFOX.copy()

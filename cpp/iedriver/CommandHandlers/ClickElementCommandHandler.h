@@ -23,6 +23,8 @@
 
 namespace webdriver {
 
+class IElementManager;
+
 class ClickElementCommandHandler : public IECommandHandler {
  public:
   ClickElementCommandHandler(void);
@@ -34,10 +36,14 @@ class ClickElementCommandHandler : public IECommandHandler {
                        Response* response);
 
  private:
+  bool IsFileUploadElement(ElementHandle element_wrapper);
   bool IsOptionElement(ElementHandle element_wrapper);
+  bool IsPossibleNavigation(ElementHandle element_wrapper,
+                            std::string* url);
   std::wstring GetSyntheticClickAtom();
   std::wstring GetClickAtom();
-  int ExecuteAtom(const std::wstring& atom_script_source,
+  int ExecuteAtom(const IECommandExecutor& executor,
+                  const std::wstring& atom_script_source,
                   BrowserHandle browser_wrapper,
                   ElementHandle element_wrapper,
                   std::string* error_msg);

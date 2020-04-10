@@ -39,6 +39,7 @@ const safari = require('./safari');
 const session = require('./lib/session');
 const until = require('./lib/until');
 const webdriver = require('./lib/webdriver');
+const opera = require('./opera');
 
 const Browser = capabilities.Browser;
 const Capabilities = capabilities.Capabilities;
@@ -223,6 +224,9 @@ class Builder {
 
     /** @private {ie.Options} */
     this.ieOptions_ = null;
+  
+    /** @private {ie.ServiceBuilder} */
+    this.ieService_ = null;
 
     /** @private {safari.Options} */
     this.safariOptions_ = null;
@@ -238,6 +242,12 @@ class Builder {
 
     /** @private {http.Agent} */
     this.agent_ = null;
+
+    /** @private {opera.Options} */
+    this.operaOptions_ = null;
+
+    /** @private {remote.DriverService.Builder} */
+    this.operaService_ = null;
   }
 
   /**
@@ -418,6 +428,20 @@ class Builder {
   }
 
   /**
+   * Sets Opera specific {@linkplain opera.Options options} for drivers
+   * created by this builder. Any logging or proxy settings defined on the given
+   * options will take precedence over those set through
+   * {@link #setLoggingPrefs} and {@link #setProxy}, respectively.
+   *
+   * @param {!opera.Options} options The OperaDriver options to use.
+   * @return {!Builder} A self reference.
+   */
+  setOperaOptions(options) {
+    this.operaOptions_ = options;
+    return this;
+  }
+
+  /**
    * @return {chrome.Options} the Chrome specific options currently configured
    *     for this builder.
    */
@@ -491,6 +515,18 @@ class Builder {
   }
 
   /**
+   * Sets the {@link ie.ServiceBuilder} to use to manage the geckodriver
+   * child process when creating IE sessions locally.
+   *
+   * @param {ie.ServiceBuilder} service the service to use.
+   * @return {!Builder} a self reference.
+   */
+  setIeService(service) {
+    this.ieService_ = service;
+    return this;
+  }
+
+  /**
    * Set {@linkplain edge.Options options} specific to Microsoft's Edge browser
    * for drivers created by this builder. Any proxy settings defined on the
    * given options will take precedence over those set through
@@ -516,6 +552,21 @@ class Builder {
       throw TypeError('not a edge.ServiceBuilder object');
     }
     this.edgeService_ = service;
+    return this;
+  }
+
+  /**
+   * Sets the {@link opera.ServiceBuilder} to use to manage the
+   * operaDriver child process when creating sessions locally.
+   *
+   * @param {opera.ServiceBuilder} service the service to use.
+   * @return {!Builder} a self reference.
+   */
+  setOperaService(service) {
+    if (service && !(service instanceof opera.ServiceBuilder)) {
+      throw TypeError('not a opera.ServiceBuilder object');
+    }
+    this.operaService_ = service;
     return this;
   }
 
@@ -595,6 +646,9 @@ class Builder {
 
     } else if (browser === Browser.EDGE && this.edgeOptions_) {
       capabilities.merge(this.edgeOptions_);
+
+    } else if (browser === Browser.OPERA && this.operaOptions_) {
+      capabilities.merge(this.operaOptions_);
     }
 
     checkOptions(
@@ -656,7 +710,11 @@ class Builder {
       }
 
       case Browser.INTERNET_EXPLORER:
-        return createDriver(ie.Driver, capabilities);
+        let service = null;
+        if (this.ieService_) {
+          service = this.ieService_.build();
+        }
+        return createDriver(ie.Driver, capabilities, service);
 
       case Browser.EDGE: {
         let service = null;
@@ -664,6 +722,14 @@ class Builder {
           service = this.edgeService_.build();
         }
         return createDriver(edge.Driver, capabilities, service);
+      }
+
+      case Browser.OPERA: {
+        let service = null;
+        if (this.operaService_) {
+          service = this.operaService_.build();
+        }
+        return createDriver(opera.Driver, capabilities, service);
       }
 
       case Browser.SAFARI:
@@ -746,6 +812,7 @@ exports.Capability = capabilities.Capability;
 exports.Condition = webdriver.Condition;
 exports.FileDetector = input.FileDetector;
 exports.Key = input.Key;
+exports.Origin = input.Origin;
 exports.Session = session.Session;
 exports.ThenableWebDriver = ThenableWebDriver;
 exports.WebDriver = webdriver.WebDriver;

@@ -6,9 +6,9 @@ namespace OpenQA.Selenium
     public class SvgDocumentTest : DriverTestFixture
     {
         [Test]
-        [IgnoreBrowser(Browser.HtmlUnit, "SVG tests only in rendered browsers")]
         [IgnoreBrowser(Browser.Opera, "Not tested")]
-        [IgnoreBrowser(Browser.Chrome, "Test not supported in Chrome yet")]
+        [IgnoreBrowser(Browser.Chrome, "Chrome driver does not support clicking on SVG element yet")]
+        [IgnoreBrowser(Browser.Edge, "Edge driver does not support clicking on SVG element yet")]
         public void ClickOnSvgElement()
         {
             if (TestUtilities.IsOldIE(driver))
@@ -25,7 +25,6 @@ namespace OpenQA.Selenium
         }
 
         [Test]
-        [IgnoreBrowser(Browser.HtmlUnit, "SVG tests only in rendered browsers")]
         [IgnoreBrowser(Browser.Opera, "Not tested")]
         public void ExecuteScriptInSvgDocument()
         {

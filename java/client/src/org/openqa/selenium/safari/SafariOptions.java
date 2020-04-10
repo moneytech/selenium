@@ -17,16 +17,15 @@
 
 package org.openqa.selenium.safari;
 
+import static org.openqa.selenium.remote.CapabilityType.BROWSER_NAME;
+
 import com.google.common.collect.ImmutableSortedMap;
 
-import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.MutableCapabilities;
-import org.openqa.selenium.Platform;
-import org.openqa.selenium.Proxy;
+import org.openqa.selenium.remote.AbstractDriverOptions;
+import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.WebDriverException;
-import org.openqa.selenium.remote.CapabilityType;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -36,7 +35,7 @@ import java.util.TreeMap;
  * <p>Example usage:
  * <pre><code>
  * SafariOptions options = new SafariOptions()
- * options.setUseCleanSession(true);
+ * options.setUseTechnologyPreview(true);
  *
  * // For use with SafariDriver:
  * SafariDriver driver = new SafariDriver(options);
@@ -47,29 +46,28 @@ import java.util.TreeMap;
  *     options);
  * </code></pre>
  */
-public class SafariOptions extends MutableCapabilities {
+public class SafariOptions extends AbstractDriverOptions<SafariOptions> {
+
+  static final String SAFARI_TECH_PREVIEW = "Safari Technology Preview";
 
   /**
    * Key used to store SafariOptions in a {@link Capabilities} object.
+   * @deprecated No replacement. Use the methods on this class
    */
+  @Deprecated
   public static final String CAPABILITY = "safari.options";
 
   private interface Option {
-    String CLEAN_SESSION = "cleanSession";
-    String TECHNOLOGY_PREVIEW = "technologyPreview";
-    String PORT = "port";
+    // Defined by Apple
+    String AUTOMATIC_INSPECTION  = "safari:automaticInspection";
+    String AUTOMATIC_PROFILING = "safari:automaticProfiling";
   }
 
   private Map<String, Object> options = new TreeMap<>();
 
   public SafariOptions() {
-    options.put(Option.PORT, 0);
-
     setUseTechnologyPreview(false);
-    setUseCleanSession(false);
-
-    setCapability(CapabilityType.BROWSER_NAME, "safari");
-    setCapability(CapabilityType.PLATFORM, Platform.MAC);
+    setCapability(BROWSER_NAME, "safari");
   }
 
   public SafariOptions(Capabilities source) {
@@ -94,7 +92,7 @@ public class SafariOptions extends MutableCapabilities {
   }
 
   /**
-   * Construct a {@link SafariOptions} instance from given capabilites.
+   * Construct a {@link SafariOptions} instance from given capabilities.
    * When the {@link #CAPABILITY} capability is set, all other capabilities will be ignored!
    *
    * @param capabilities Desired capabilities from which the options are derived.
@@ -103,58 +101,43 @@ public class SafariOptions extends MutableCapabilities {
    */
   public static SafariOptions fromCapabilities(Capabilities capabilities)
       throws WebDriverException {
+    if (capabilities instanceof SafariOptions) {
+      return (SafariOptions) capabilities;
+    }
     Object cap = capabilities.getCapability(SafariOptions.CAPABILITY);
     if (cap instanceof SafariOptions) {
       return (SafariOptions) cap;
     } else if (cap instanceof Map) {
-      try {
-        return SafariOptions.fromJsonMap((Map<?, ?>) cap);
-      } catch (IOException e) {
-        throw new WebDriverException(e);
-      }
+      return new SafariOptions(new MutableCapabilities(((Map<String, ?>) cap)));
     } else {
-      return new SafariOptions();
+      return new SafariOptions(capabilities);
     }
   }
 
   // Setters
-
+  
   /**
-   * Set the port the {@link SafariDriverService} should be started on. Defaults to 0, in which case
-   * the server selects a free port.
+   * Instruct the SafariDriver to enable the Automatic Inspection if true, otherwise disable
+   * the automatic inspection. Defaults to disabling the automatic inspection.
    *
-   * @param port The port the {@link SafariDriverService} should be started on,
-   *    or 0 if the server should select a free port.
-   * @deprecated Create a {@link SafariDriverService} to specify driver service port and pass
-   * the service instance to a {@link SafariDriver} constructor.
+   * @param automaticInspection If true, the SafariDriver will enable the Automation Inspection,
+   *                            otherwise will disable.
    */
-  @Deprecated
-  SafariOptions setPort(int port) {
-    options.put(Option.PORT, port);
+  public SafariOptions setAutomaticInspection(boolean automaticInspection) {
+    setCapability(Option.AUTOMATIC_INSPECTION, automaticInspection);
     return this;
   }
 
   /**
-   * Instruct the SafariDriver to delete all existing session data when starting a new session.
-   * This includes browser history, cache, cookies, HTML5 local storage, and HTML5 databases.
+   * Instruct the SafariDriver to enable the Automatic profiling if true, otherwise disable
+   * the automatic profiling. Defaults to disabling the automatic profiling.
    *
-   * <p><strong>Warning:</strong> Since Safari uses a single profile for the
-   * current user, enabling this capability will permanently erase any existing
-   * session data.
-   *
-   * @param useCleanSession If true, the SafariDriver will erase all existing session data.
+   * @param automaticProfiling If true, the SafariDriver will enable the Automation Profiling,
+   *                            otherwise will disable.
    */
-  public SafariOptions useCleanSession(boolean useCleanSession) {
-    options.put(Option.CLEAN_SESSION, useCleanSession);
+  public SafariOptions setAutomaticProfiling(boolean automaticProfiling) {
+    setCapability(Option.AUTOMATIC_PROFILING, automaticProfiling);
     return this;
-  }
-
-  /**
-   * @deprecated Use {@link #useCleanSession(boolean)} instead
-   */
-  @Deprecated
-  public SafariOptions setUseCleanSession(boolean useCleanSession) {
-    return useCleanSession(useCleanSession);
   }
 
   /**
@@ -165,107 +148,23 @@ public class SafariOptions extends MutableCapabilities {
    *     otherwise will use the release version of Safari.
    */
   public SafariOptions setUseTechnologyPreview(boolean useTechnologyPreview) {
-    options.put(Option.TECHNOLOGY_PREVIEW, useTechnologyPreview);
-    return this;
-  }
-
-  @Override
-  public void setCapability(String key, Object value) {
-    if (Option.TECHNOLOGY_PREVIEW.equals(key)) {
-      setUseTechnologyPreview(Boolean.valueOf(value.toString()));
-    } else if (Option.CLEAN_SESSION.equals(key)) {
-      useCleanSession(Boolean.valueOf(value.toString()));
-    } else {
-      super.setCapability(key, value);
-    }
-  }
-
-  @Override
-  public void setCapability(String key, boolean value) {
-    if (Option.TECHNOLOGY_PREVIEW.equals(key)) {
-      setUseTechnologyPreview(value);
-    } else if (Option.CLEAN_SESSION.equals(key)) {
-      useCleanSession(value);
-    } else {
-      super.setCapability(key, value);
-    }
-  }
-
-  public SafariOptions setProxy(Proxy proxy) {
-    setCapability(CapabilityType.PROXY, proxy);
+    // Use an object here, rather than a boolean to avoid a stack overflow
+    super.setCapability(BROWSER_NAME, useTechnologyPreview ? SAFARI_TECH_PREVIEW : "safari");
     return this;
   }
 
   // Getters
 
-  /**
-   * @return The port the {@link SafariDriverService} should be started on.
-   *    If 0, the server should select a free port.
-   * @see #setPort(int)
-   * @deprecated Getters are not needed in browser Options classes.
-   */
-  @Deprecated
-  public int getPort() {
-    return (int) options.getOrDefault(Option.PORT, 0);
+  public boolean getAutomaticInspection() {
+    return Boolean.TRUE.equals(getCapability(Option.AUTOMATIC_INSPECTION));
   }
 
-  /**
-   * @return Whether the SafariDriver should erase all session data before launching Safari.
-   * @see #setUseCleanSession(boolean)
-   * @deprecated Getters are not needed in browser Options classes.
-   */
-  @Deprecated
-  public boolean getUseCleanSession() {
-    return (boolean) options.getOrDefault(Option.CLEAN_SESSION, false);
+  public boolean getAutomaticProfiling() {
+    return Boolean.TRUE.equals(is(Option.AUTOMATIC_PROFILING));
   }
 
-  /**
-   * @deprecated Getters are not needed in browser Options classes.
-   */
-  @Deprecated
   public boolean getUseTechnologyPreview() {
-    return (boolean) options.getOrDefault(Option.TECHNOLOGY_PREVIEW, false);
-  }
-
-  // (De)serialization of the options
-
-  /**
-   * Parse a Map and reconstruct the {@link SafariOptions}.
-   *
-   * @return A {@link SafariOptions} instance associated with these extensions.
-   */
-  private static SafariOptions fromJsonMap(Map<?, ?> options) throws IOException {
-    SafariOptions safariOptions = new SafariOptions();
-
-    Number port = (Number) options.get(Option.PORT);
-    if (port != null) {
-      safariOptions.setPort(port.intValue());
-    }
-
-    Boolean useCleanSession = (Boolean) options.get(Option.CLEAN_SESSION);
-    if (useCleanSession != null) {
-      safariOptions.useCleanSession(useCleanSession);
-    }
-
-    Boolean useTechnologyPreview = (Boolean) options.get(Option.TECHNOLOGY_PREVIEW);
-    if (useTechnologyPreview != null) {
-      safariOptions.setUseTechnologyPreview(useTechnologyPreview);
-    }
-
-    return safariOptions;
-  }
-
-  /**
-   * Returns DesiredCapabilities for Safari with these options included as
-   * capabilities. This does not copy the object. Further changes will be
-   * reflected in the returned capabilities.
-   *
-   * @return DesiredCapabilities for Safari with these extensions.
-   * @deprecated {@code SafariOptions} are already {@link MutableCapabilities}.
-   */
-  @Deprecated
-  MutableCapabilities toCapabilities() {
-    return this;
+    return SAFARI_TECH_PREVIEW.equals(getBrowserName());
   }
 
   @Override

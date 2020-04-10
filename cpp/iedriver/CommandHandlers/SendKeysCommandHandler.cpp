@@ -27,6 +27,7 @@
 #include "../IECommandExecutor.h"
 #include "../InputManager.h"
 #include "../StringUtilities.h"
+#include "../VariantUtilities.h"
 #include "../WindowUtilities.h"
 
 #define MAXIMUM_DIALOG_FIND_RETRIES 50
@@ -83,162 +84,76 @@ void SendKeysCommandHandler::ExecuteInternal(
       response->SetErrorResponse(status_code, "Unable to get browser");
       return;
     }
-    HWND window_handle = browser_wrapper->GetContentWindowHandle();
-    HWND top_level_window_handle = browser_wrapper->GetTopLevelWindowHandle();
 
-    ElementHandle element_wrapper;
-    status_code = this->GetElement(executor, element_id, &element_wrapper);
+    ElementHandle initial_element;
+    status_code = this->GetElement(executor, element_id, &initial_element);
 
     if (status_code == WD_SUCCESS) {
-      CComPtr<IHTMLElement> element(element_wrapper->element());
+      ElementHandle element_wrapper = initial_element;
+      CComPtr<IHTMLOptionElement> option;
+      HRESULT hr = initial_element->element()->QueryInterface<IHTMLOptionElement>(&option);
+      if (SUCCEEDED(hr) && option) {
+        // If this is an <option> element, we want to operate on its parent
+        // <select> element.
+        CComPtr<IHTMLElement> parent_node;
+        hr = initial_element->element()->get_parentElement(&parent_node);
+        while (SUCCEEDED(hr) && parent_node) {
+          CComPtr<IHTMLSelectElement> select;
+          HRESULT select_hr = parent_node->QueryInterface<IHTMLSelectElement>(&select);
+          if (SUCCEEDED(select_hr) && select) {
+            IECommandExecutor& mutable_executor = const_cast<IECommandExecutor&>(executor);
+            mutable_executor.AddManagedElement(parent_node, &element_wrapper);
+            break;
+          }
+          hr = parent_node->get_parentElement(&parent_node);
+        }
+      }
 
+      // Scroll the target element into view before executing the action
+      // sequence.
       LocationInfo location = {};
       std::vector<LocationInfo> frame_locations;
       element_wrapper->GetLocationOnceScrolledIntoView(executor.input_manager()->scroll_behavior(),
-                                                        &location,
-                                                        &frame_locations);
+                                                       &location,
+                                                       &frame_locations);
 
-      CComPtr<IHTMLInputFileElement> file;
-      element->QueryInterface<IHTMLInputFileElement>(&file);
-      CComPtr<IHTMLInputElement> input;
-      element->QueryInterface<IHTMLInputElement>(&input);
-      CComBSTR element_type;
-      if (input) {
-        input->get_type(&element_type);
-        HRESULT hr = element_type.ToLower();
-        if (FAILED(hr)) {
-          LOGHR(WARN, hr) << "Failed converting type attribute of <input> element to lowercase using ToLower() method of BSTR";
+      if (this->IsFileUploadElement(element_wrapper)) {
+        if (executor.use_strict_file_interactability()) {
+          std::string upload_error_description = "";
+          if (!this->IsElementInteractable(element_wrapper,
+                                           &upload_error_description)) {
+            response->SetErrorResponse(ERROR_ELEMENT_NOT_INTERACTABLE,
+                                       upload_error_description);
+            return;
+          }
         }
-      }
-      bool is_file_element = (file != NULL) ||
-                             (input != NULL && element_type == L"file");
-      if (is_file_element) {
-        // Key sequence should be a path and file name. Check
-        // to see that the file exists before invoking the file
-        // selection dialog. Note that we also error if the file
-        // path passed in is valid, but is a directory instead of
-        // a file.
-        DWORD file_attributes = ::GetFileAttributes(keys.c_str());
-        if (file_attributes == INVALID_FILE_ATTRIBUTES ||
-            (file_attributes & FILE_ATTRIBUTE_DIRECTORY)) {
-          response->SetErrorResponse(EUNHANDLEDERROR, "Attempting to upload file '" + StringUtilities::ToString(keys) + "' which does not exist.");
-          return;
-        }
-
-        DWORD ie_process_id;
-        ::GetWindowThreadProcessId(window_handle, &ie_process_id);
-
-        FileNameData key_data;
-        key_data.main = top_level_window_handle;
-        key_data.hwnd = window_handle;
-        key_data.text = keys.c_str();
-        key_data.ieProcId = ie_process_id;
-        key_data.dialogTimeout = executor.file_upload_dialog_timeout();
-        key_data.useLegacyDialogHandling = executor.use_legacy_file_upload_dialog_handling();
-
-        unsigned int thread_id;
-        HANDLE thread_handle = reinterpret_cast<HANDLE>(_beginthreadex(NULL,
-                                                        0,
-                                                        &SendKeysCommandHandler::SetFileValue,
-                                                        reinterpret_cast<void*>(&key_data),
-                                                        0,
-                                                        &thread_id));
-
-        LOG(DEBUG) << "Clicking upload button and starting to handle file selection dialog";
-        element->click();
-        // We're now blocked until the dialog closes.
-        ::CloseHandle(thread_handle);
-        response->SetSuccessResponse(Json::Value::null);
+        this->UploadFile(browser_wrapper, element_wrapper, executor, keys, response);
         return;
       }
 
-      bool shift_pressed = executor.input_manager()->is_shift_pressed();
-      bool control_pressed = executor.input_manager()->is_control_pressed();
-      bool alt_pressed = executor.input_manager()->is_alt_pressed();
-
-      keys.push_back(static_cast<wchar_t>(WD_KEY_NULL));
-      Json::Value key_array(Json::arrayValue);
-      for (size_t i = 0; i < keys.size(); ++i) {
-        std::wstring character = L"";
-        character.push_back(keys[i]);
-        std::string single_key = StringUtilities::ToString(character);
-
-        if (keys[i] == WD_KEY_SHIFT) {
-          Json::Value shift_key_value;
-          shift_key_value["value"] = single_key;
-          if (shift_pressed) {
-            shift_key_value["type"] = "keyUp";
-          } else {
-            shift_key_value["type"] = "keyDown";
-            shift_pressed = true;
-          }
-          key_array.append(shift_key_value);
-          continue;
-        } else if (keys[i] == WD_KEY_CONTROL) {
-          Json::Value control_key_value;
-          control_key_value["value"] = single_key;
-          if (control_pressed) {
-            control_key_value["type"] = "keyUp";
-          } else {
-            control_key_value["type"] = "keyDown";
-            control_pressed = true;
-          }
-          key_array.append(control_key_value);
-          continue;
-        } else if (keys[i] == WD_KEY_ALT) {
-          Json::Value alt_key_value;
-          alt_key_value["value"] = single_key;
-          if (alt_pressed) {
-            alt_key_value["type"] = "keyUp";
-          } else {
-            alt_key_value["type"] = "keyDown";
-            alt_pressed = true;
-          }
-          key_array.append(alt_key_value);
-          continue;
-        }
-
-        Json::Value key_down_value;
-        key_down_value["type"] = "keyDown";
-        key_down_value["value"] = single_key;
-        key_array.append(key_down_value);
-
-        Json::Value key_up_value;
-        key_up_value["type"] = "keyUp";
-        key_up_value["value"] = single_key;
-        key_array.append(key_up_value);
-      }
-
-      Json::Value value;
-      value["type"] = "key";
-      value["id"] = "send keys keyboard";
-      value["actions"] = key_array;
-
-      Json::Value actions(Json::arrayValue);
-      actions.append(value);
-
-      bool displayed;
-      status_code = element_wrapper->IsDisplayed(true, &displayed);
-      if (status_code != WD_SUCCESS || !displayed) {
-        response->SetErrorResponse(EELEMENTNOTDISPLAYED,
-                                    "Element is not displayed");
+      std::string error_description = "";
+      bool is_interactable = IsElementInteractable(element_wrapper,
+                                                   &error_description);
+      if (!is_interactable) {
+        response->SetErrorResponse(ERROR_ELEMENT_NOT_INTERACTABLE,
+                                   error_description);
         return;
       }
 
-      if (!element_wrapper->IsEnabled()) {
-        response->SetErrorResponse(EELEMENTNOTENABLED,
-                                    "Element is not enabled");
-        return;
-      }
-
-      if (!this->VerifyPageHasFocus(top_level_window_handle, window_handle)) {
+      if (!this->VerifyPageHasFocus(browser_wrapper)) {
         LOG(WARN) << "HTML rendering pane does not have the focus. Keystrokes may go to an unexpected UI element.";
       }
-      if (!this->WaitUntilElementFocused(element)) {
-        LOG(WARN) << "Specified element is not the active element. Keystrokes may go to an unexpected DOM element.";
+      if (!this->WaitUntilElementFocused(element_wrapper)) {
+        error_description = "Element cannot be interacted with via the keyboard because it is not focusable";
+        response->SetErrorResponse(ERROR_ELEMENT_NOT_INTERACTABLE,
+                                   error_description);
+        return;
       }
-      
-      status_code = executor.input_manager()->PerformInputSequence(browser_wrapper, actions);
+
+      Json::Value actions = this->CreateActionSequencePayload(executor, &keys);
+
+      std::string error_info = "";
+      status_code = executor.input_manager()->PerformInputSequence(browser_wrapper, actions, &error_info);
       response->SetSuccessResponse(Json::Value::null);
       return;
     } else {
@@ -248,10 +163,249 @@ void SendKeysCommandHandler::ExecuteInternal(
   }
 }
 
+bool SendKeysCommandHandler::IsElementInteractable(ElementHandle element_wrapper,
+                                                   std::string* error_description) {
+  bool displayed;
+  int status_code = element_wrapper->IsDisplayed(true, &displayed);
+  if (status_code != WD_SUCCESS || !displayed) {
+    *error_description = "Element cannot be interacted with via the keyboard because it is not displayed";
+    return false;
+  }
+
+  if (!element_wrapper->IsEnabled()) {
+    *error_description = "Element cannot be interacted with via the keyboard because it is not enabled";
+    return false;
+  }
+
+  return true;
+}
+
+Json::Value SendKeysCommandHandler::CreateActionSequencePayload(const IECommandExecutor& executor,
+                                                                std::wstring* keys) {
+  bool shift_pressed = executor.input_manager()->is_shift_pressed();
+  bool control_pressed = executor.input_manager()->is_control_pressed();
+  bool alt_pressed = executor.input_manager()->is_alt_pressed();
+
+  keys->push_back(static_cast<wchar_t>(WD_KEY_NULL));
+  Json::Value key_array(Json::arrayValue);
+  for (size_t i = 0; i < keys->size(); ++i) {
+    std::wstring character = L"";
+    character.push_back(keys->at(i));
+    if (IS_HIGH_SURROGATE(keys->at(i))) {
+      // We've converted the key string to a wstring, which contain
+      // wchar_t elements. On Windows, wchar_t is 16 bits, meaning
+      // the string has been encoded to UTF-16, which implies each
+      // Unicode code point will be either one wchar_t (where the
+      // value <= 0xFFFF), or two wchar_ts (where the code point is
+      // represented by a surrogate pair). In the latter case, we
+      // test for the first part of a surrogate pair, and if  it is
+      // one, we grab the next wchar_t, and use the two together to
+      // represent a single Unicode "character."
+      ++i;
+      character.push_back(keys->at(i));
+    }
+
+    std::string single_key = StringUtilities::ToString(character);
+
+    if (keys->at(i) == WD_KEY_SHIFT) {
+      Json::Value shift_key_value;
+      shift_key_value["value"] = single_key;
+      if (shift_pressed) {
+        shift_key_value["type"] = "keyUp";
+      } else {
+        shift_key_value["type"] = "keyDown";
+        shift_pressed = true;
+      }
+      key_array.append(shift_key_value);
+      continue;
+    } else if (keys->at(i) == WD_KEY_CONTROL) {
+      Json::Value control_key_value;
+      control_key_value["value"] = single_key;
+      if (control_pressed) {
+        control_key_value["type"] = "keyUp";
+      } else {
+        control_key_value["type"] = "keyDown";
+        control_pressed = true;
+      }
+      key_array.append(control_key_value);
+      continue;
+    } else if (keys->at(i) == WD_KEY_ALT) {
+      Json::Value alt_key_value;
+      alt_key_value["value"] = single_key;
+      if (alt_pressed) {
+        alt_key_value["type"] = "keyUp";
+      } else {
+        alt_key_value["type"] = "keyDown";
+        alt_pressed = true;
+      }
+      key_array.append(alt_key_value);
+      continue;
+    }
+
+    Json::Value key_down_value;
+    key_down_value["type"] = "keyDown";
+    key_down_value["value"] = single_key;
+    key_array.append(key_down_value);
+
+    Json::Value key_up_value;
+    key_up_value["type"] = "keyUp";
+    key_up_value["value"] = single_key;
+    key_array.append(key_up_value);
+  }
+
+  Json::Value value;
+  value["type"] = "key";
+  value["id"] = "send keys keyboard";
+  value["actions"] = key_array;
+
+  Json::Value actions(Json::arrayValue);
+  actions.append(value);
+  return actions;
+}
+
+bool SendKeysCommandHandler::HasMultipleAttribute(ElementHandle element_wrapper) {
+  bool allows_multiple = false;
+  CComVariant multiple_value;
+  int status_code = element_wrapper->GetAttributeValue("multiple",
+                                                       &multiple_value);
+  if (status_code == WD_SUCCESS &&
+      VariantUtilities::VariantIsString(multiple_value)) {
+    if (0 == wcscmp(multiple_value.bstrVal, L"true")) {
+      allows_multiple = true;
+    }
+  }
+  return allows_multiple;
+}
+
+void SendKeysCommandHandler::UploadFile(BrowserHandle browser_wrapper,
+                                        ElementHandle element_wrapper,
+                                        const IECommandExecutor& executor,
+                                        const std::wstring& keys,
+                                        Response* response) {
+  bool allows_multiple = this->HasMultipleAttribute(element_wrapper);
+
+  std::vector<std::wstring> file_list;
+  StringUtilities::Split(keys, L"\n", &file_list);
+
+  if (file_list.size() == 0) {
+    response->SetErrorResponse(EINVALIDARGUMENT,
+                               "Upload file cannot be an empty string.");
+    return;
+  }
+
+  if (!allows_multiple && file_list.size() > 1) {
+    response->SetErrorResponse(EINVALIDARGUMENT,
+                               "Attempting to upload multiple files to file upload element without multiple attribute.");
+    return;
+  }
+
+  std::wstring file_directory = L"";
+  std::wstring file_dialog_keys = L"";
+  std::vector<std::wstring>::const_iterator iterator = file_list.begin();
+  for (; iterator < file_list.end(); ++iterator) {
+    std::wstring file_name = *iterator;
+    // Key sequence should be a path and file name. Check
+    // to see that the file exists before invoking the file
+    // selection dialog. Note that we also error if the file
+    // path passed in is valid, but is a directory instead of
+    // a file.
+    bool path_exists = ::PathFileExists(file_name.c_str()) == TRUE;
+    if (!path_exists) {
+      response->SetErrorResponse(EINVALIDARGUMENT,
+                                 "Attempting to upload file '" + StringUtilities::ToString(file_name) + "' which does not exist.");
+      return;
+    }
+    bool path_is_directory = ::PathIsDirectory(file_name.c_str()) == TRUE;
+    if (path_is_directory) {
+      response->SetErrorResponse(EINVALIDARGUMENT,
+                                 "Attempting to upload file '" + StringUtilities::ToString(file_name) + "' which is a directory.");
+      return;
+    }
+
+    if (allows_multiple) {
+      std::vector<wchar_t> file_name_buffer;
+      StringUtilities::ToBuffer(file_name, &file_name_buffer);
+      ::PathRemoveFileSpec(&file_name_buffer[0]);
+      std::wstring current_file_directory = &file_name_buffer[0];
+      if (file_directory.size() == 0) {
+        file_directory = current_file_directory;
+      }
+
+      if (file_directory != current_file_directory) {
+        response->SetErrorResponse(EINVALIDARGUMENT,
+                                   "Attempting to upload multiple files, but all files must be in the same directory.");
+        return;
+      }
+    }
+
+    if (allows_multiple && file_dialog_keys.size() > 0) {
+      file_dialog_keys.append(L" ");
+    }
+    if (allows_multiple && file_name.at(0) != L'\"') {
+      file_dialog_keys.append(L"\"");
+    }
+    file_dialog_keys.append(file_name);
+    if (allows_multiple && file_name.at(file_name.size() - 1) != L'\"') {
+      file_dialog_keys.append(L"\"");
+    }
+  }
+
+  HWND window_handle = browser_wrapper->GetContentWindowHandle();
+  HWND top_level_window_handle = browser_wrapper->GetTopLevelWindowHandle();
+
+  DWORD ie_process_id;
+  ::GetWindowThreadProcessId(window_handle, &ie_process_id);
+
+  FileNameData key_data;
+  key_data.main = top_level_window_handle;
+  key_data.hwnd = window_handle;
+  key_data.text = file_dialog_keys.c_str();
+  key_data.ieProcId = ie_process_id;
+  key_data.dialogTimeout = executor.file_upload_dialog_timeout();
+  key_data.useLegacyDialogHandling = executor.use_legacy_file_upload_dialog_handling();
+
+  unsigned int thread_id;
+  HANDLE thread_handle = reinterpret_cast<HANDLE>(_beginthreadex(NULL,
+                                                                 0,
+                                                                 &SendKeysCommandHandler::SetFileValue,
+                                                                 reinterpret_cast<void*>(&key_data),
+                                                                 0,
+                                                                 &thread_id));
+
+  LOG(DEBUG) << "Clicking upload button and starting to handle file selection dialog";
+  element_wrapper->element()->click();
+  // We're now blocked until the dialog closes.
+  ::CloseHandle(thread_handle);
+  response->SetSuccessResponse(Json::Value::null);
+}
+
+bool SendKeysCommandHandler::IsFileUploadElement(ElementHandle element_wrapper) {
+  CComPtr<IHTMLElement> element(element_wrapper->element());
+
+  CComPtr<IHTMLInputFileElement> file;
+  element->QueryInterface<IHTMLInputFileElement>(&file);
+  CComPtr<IHTMLInputElement> input;
+  element->QueryInterface<IHTMLInputElement>(&input);
+  CComBSTR element_type;
+  if (input) {
+    input->get_type(&element_type);
+    HRESULT hr = element_type.ToLower();
+    if (FAILED(hr)) {
+      LOGHR(WARN, hr) << "Failed converting type attribute of <input> element to lowercase using ToLower() method of BSTR";
+    }
+  }
+  bool is_file_element = (file != NULL) ||
+                         (input != NULL && element_type == L"file");
+  return is_file_element;
+}
+
 bool SendKeysCommandHandler::GetFileSelectionDialogCandidates(std::vector<HWND> parent_window_handles, IUIAutomation* ui_automation, IUIAutomationElementArray** dialog_candidates) {
+  LOG(INFO) << "using " << parent_window_handles.size() << " parent windows";
   CComVariant dialog_control_type(UIA_WindowControlTypeId);
   CComPtr<IUIAutomationCondition> dialog_condition;
-  HRESULT hr = ui_automation->CreatePropertyCondition(UIA_ControlTypePropertyId, dialog_control_type, &dialog_condition);
+  HRESULT hr = ui_automation->CreatePropertyCondition(UIA_ControlTypePropertyId,
+                                                      dialog_control_type,
+                                                      &dialog_condition);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Could not create condition to look for dialog";
     return false;
@@ -267,12 +421,21 @@ bool SendKeysCommandHandler::GetFileSelectionDialogCandidates(std::vector<HWND> 
       LOGHR(WARN, hr) << "Did not get parent window UI Automation object";
       continue;
     }
+
     CComPtr<IUIAutomationElementArray> current_dialog_candidates;
-    hr = parent_window->FindAll(TreeScope::TreeScope_Children, dialog_condition, &current_dialog_candidates);
+    hr = parent_window->FindAll(TreeScope::TreeScope_Children,
+                                dialog_condition,
+                                &current_dialog_candidates);
     if (FAILED(hr)) {
       LOGHR(WARN, hr) << "Process of finding child dialogs of parent window failed";
       continue;
     }
+
+    if (!current_dialog_candidates) {
+      LOGHR(WARN, hr) << "Found no dialogs as children of parent window (null candidates)";
+      continue;
+    }
+
     hr = current_dialog_candidates->get_Length(&window_array_length);
     if (FAILED(hr)) {
       LOGHR(WARN, hr) << "Could not get length of list of child dialogs of parent window";
@@ -280,13 +443,14 @@ bool SendKeysCommandHandler::GetFileSelectionDialogCandidates(std::vector<HWND> 
     }
 
     if (window_array_length == 0) {
-      LOG(WARN) << "Found no dialogs as children of parent window";
+      LOG(WARN) << "Found no dialogs as children of parent window (empty candidates)";
       continue;
     } else {
       // Use CComPtr::CopyTo() to increment the refcount, because when the
       // current dialog candidates pointer goes out of scope, it will decrement
       // the refcount, which will free the object when the refcount equals
       // zero.
+      LOG(INFO) << "Found " << window_array_length << "children";
       current_dialog_candidates.CopyTo(dialog_candidates);
       found_candidate_dialogs = true;
       break;
@@ -296,17 +460,23 @@ bool SendKeysCommandHandler::GetFileSelectionDialogCandidates(std::vector<HWND> 
   return found_candidate_dialogs;
 }
 
-bool SendKeysCommandHandler::FillFileName(const wchar_t* file_name, IUIAutomation* ui_automation, IUIAutomationElement* file_selection_dialog) {
+bool SendKeysCommandHandler::FillFileName(const wchar_t* file_name,
+                                          IUIAutomation* ui_automation,
+                                          IUIAutomationElement* file_selection_dialog) {
   CComVariant file_name_combo_box_automation_id(L"1148");
   CComPtr<IUIAutomationCondition> file_name_combo_box_condition;
-  HRESULT hr = ui_automation->CreatePropertyCondition(UIA_AutomationIdPropertyId, file_name_combo_box_automation_id, &file_name_combo_box_condition);
+  HRESULT hr = ui_automation->CreatePropertyCondition(UIA_AutomationIdPropertyId,
+                                                      file_name_combo_box_automation_id,
+                                                      &file_name_combo_box_condition);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Could not create condition to look for file selection combo box";
     return false;
   }
 
   CComPtr<IUIAutomationElement> file_name_combo_box;
-  hr = file_selection_dialog->FindFirst(TreeScope::TreeScope_Children, file_name_combo_box_condition, &file_name_combo_box);
+  hr = file_selection_dialog->FindFirst(TreeScope::TreeScope_Children,
+                                        file_name_combo_box_condition,
+                                        &file_name_combo_box);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Failed to get file name combo box on current dialog, trying next dialog";
     return false;
@@ -314,21 +484,26 @@ bool SendKeysCommandHandler::FillFileName(const wchar_t* file_name, IUIAutomatio
 
   CComVariant edit_control_type(UIA_EditControlTypeId);
   CComPtr<IUIAutomationCondition> file_name_edit_condition;
-  hr = ui_automation->CreatePropertyCondition(UIA_ControlTypePropertyId, edit_control_type, &file_name_edit_condition);
+  hr = ui_automation->CreatePropertyCondition(UIA_ControlTypePropertyId,
+                                              edit_control_type,
+                                              &file_name_edit_condition);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Could not create condition to look for file selection edit control";
     return false;
   }
 
   CComPtr<IUIAutomationElement> file_name_edit_box;
-  hr = file_name_combo_box->FindFirst(TreeScope::TreeScope_Children, file_name_edit_condition, &file_name_edit_box);
+  hr = file_name_combo_box->FindFirst(TreeScope::TreeScope_Children,
+                                      file_name_edit_condition,
+                                      &file_name_edit_box);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Failed to get file name edit box from combo box on current dialog, trying next dialog";
     return false;
   }
 
   CComPtr<IUIAutomationValuePattern> file_name_value_pattern;
-  hr = file_name_edit_box->GetCurrentPatternAs(UIA_ValuePatternId, IID_PPV_ARGS(&file_name_value_pattern));
+  hr = file_name_edit_box->GetCurrentPatternAs(UIA_ValuePatternId,
+                                               IID_PPV_ARGS(&file_name_value_pattern));
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Failed to get value pattern for file name edit box on current dialog, trying next dialog";
     return false;
@@ -344,24 +519,30 @@ bool SendKeysCommandHandler::FillFileName(const wchar_t* file_name, IUIAutomatio
   return true;
 }
 
-bool SendKeysCommandHandler::AcceptFileSelection(IUIAutomation* ui_automation, IUIAutomationElement* file_selection_dialog) {
+bool SendKeysCommandHandler::AcceptFileSelection(IUIAutomation* ui_automation,
+                                                 IUIAutomationElement* file_selection_dialog) {
   CComVariant open_button_automation_id(L"1");
   CComPtr<IUIAutomationCondition> open_button_condition;
-  HRESULT hr = ui_automation->CreatePropertyCondition(UIA_AutomationIdPropertyId, open_button_automation_id, &open_button_condition);
+  HRESULT hr = ui_automation->CreatePropertyCondition(UIA_AutomationIdPropertyId,
+                                                      open_button_automation_id,
+                                                      &open_button_condition);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Could not create condition to look for open button";
     return false;
   }
 
   CComPtr<IUIAutomationElement> open_button;
-  hr = file_selection_dialog->FindFirst(TreeScope::TreeScope_Children, open_button_condition, &open_button);
+  hr = file_selection_dialog->FindFirst(TreeScope::TreeScope_Children,
+                                        open_button_condition,
+                                        &open_button);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Failed to get open button on current dialog, trying next dialog";
     return false;
   }
 
   CComPtr<IUIAutomationInvokePattern> open_button_invoke_pattern;
-  hr = open_button->GetCurrentPatternAs(UIA_InvokePatternId, IID_PPV_ARGS(&open_button_invoke_pattern));
+  hr = open_button->GetCurrentPatternAs(UIA_InvokePatternId,
+                                        IID_PPV_ARGS(&open_button_invoke_pattern));
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Failed to get invoke pattern for open button on current dialog, trying next dialog";
     return false;
@@ -376,7 +557,8 @@ bool SendKeysCommandHandler::AcceptFileSelection(IUIAutomation* ui_automation, I
   return true;
 }
 
-bool SendKeysCommandHandler::WaitForFileSelectionDialogClose(const int timeout, IUIAutomationElement* file_selection_dialog) {
+bool SendKeysCommandHandler::WaitForFileSelectionDialogClose(const int timeout,
+                                                             IUIAutomationElement* file_selection_dialog) {
   HWND dialog_window_handle;
   HRESULT hr = file_selection_dialog->get_CurrentNativeWindowHandle(reinterpret_cast<UIA_HWND*>(&dialog_window_handle));
   if (FAILED(hr)) {
@@ -393,16 +575,22 @@ bool SendKeysCommandHandler::WaitForFileSelectionDialogClose(const int timeout, 
   return is_dialog_closed;
 }
 
-bool SendKeysCommandHandler::FindFileSelectionErrorDialog(IUIAutomation* ui_automation, IUIAutomationElement* file_selection_dialog, IUIAutomationElement** error_dialog) {
+bool SendKeysCommandHandler::FindFileSelectionErrorDialog(IUIAutomation* ui_automation,
+                                                          IUIAutomationElement* file_selection_dialog,
+                                                          IUIAutomationElement** error_dialog) {
   CComVariant dialog_control_type(UIA_WindowControlTypeId);
   CComPtr<IUIAutomationCondition> dialog_condition;
-  HRESULT hr = ui_automation->CreatePropertyCondition(UIA_ControlTypePropertyId, dialog_control_type, &dialog_condition);
+  HRESULT hr = ui_automation->CreatePropertyCondition(UIA_ControlTypePropertyId,
+                                                      dialog_control_type,
+                                                      &dialog_condition);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Could not create condition to look for dialog";
     return false;
   }
 
-  hr = file_selection_dialog->FindFirst(TreeScope::TreeScope_Children, dialog_condition, error_dialog);
+  hr = file_selection_dialog->FindFirst(TreeScope::TreeScope_Children,
+                                        dialog_condition,
+                                        error_dialog);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Could not find error dialog owned by file selection dialog";
     return false;
@@ -411,17 +599,22 @@ bool SendKeysCommandHandler::FindFileSelectionErrorDialog(IUIAutomation* ui_auto
   return true;
 }
 
-bool SendKeysCommandHandler::DismissFileSelectionErrorDialog(IUIAutomation* ui_automation, IUIAutomationElement* error_dialog) {
+bool SendKeysCommandHandler::DismissFileSelectionErrorDialog(IUIAutomation* ui_automation,
+                                                             IUIAutomationElement* error_dialog) {
   CComVariant error_dialog_text_automation_id(L"ContentText");
   CComPtr<IUIAutomationCondition> error_dialog_text_condition;
-  HRESULT hr = ui_automation->CreatePropertyCondition(UIA_AutomationIdPropertyId, error_dialog_text_automation_id, &error_dialog_text_condition);
+  HRESULT hr = ui_automation->CreatePropertyCondition(UIA_AutomationIdPropertyId,
+                                                      error_dialog_text_automation_id,
+                                                      &error_dialog_text_condition);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Could not create condition to look for error text control";
     return false;
   }
 
   CComPtr<IUIAutomationElement> error_dialog_text_control;
-  hr = error_dialog->FindFirst(TreeScope::TreeScope_Children, error_dialog_text_condition, &error_dialog_text_control);
+  hr = error_dialog->FindFirst(TreeScope::TreeScope_Children,
+                               error_dialog_text_condition,
+                               &error_dialog_text_control);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Failed to get error message text control on error dialog";
   }
@@ -436,21 +629,26 @@ bool SendKeysCommandHandler::DismissFileSelectionErrorDialog(IUIAutomation* ui_a
 
   CComVariant error_dialog_ok_button_automation_id(L"CommandButton_1");
   CComPtr<IUIAutomationCondition> error_dialog_ok_button_condition;
-  hr = ui_automation->CreatePropertyCondition(UIA_AutomationIdPropertyId, error_dialog_ok_button_automation_id, &error_dialog_ok_button_condition);
+  hr = ui_automation->CreatePropertyCondition(UIA_AutomationIdPropertyId,
+                                              error_dialog_ok_button_automation_id,
+                                              &error_dialog_ok_button_condition);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Could not create condition to look for error message OK button";
     return false;
   }
 
   CComPtr<IUIAutomationElement> error_dialog_ok_button;
-  hr = error_dialog->FindFirst(TreeScope::TreeScope_Children, error_dialog_ok_button_condition, &error_dialog_ok_button);
+  hr = error_dialog->FindFirst(TreeScope::TreeScope_Children,
+                               error_dialog_ok_button_condition,
+                               &error_dialog_ok_button);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Failed to get OK button on error dialog";
     return false;
   }
 
   CComPtr<IUIAutomationInvokePattern> error_dialog_ok_button_invoke_pattern;
-  hr = error_dialog_ok_button->GetCurrentPatternAs(UIA_InvokePatternId, IID_PPV_ARGS(&error_dialog_ok_button_invoke_pattern));
+  hr = error_dialog_ok_button->GetCurrentPatternAs(UIA_InvokePatternId,
+                                                   IID_PPV_ARGS(&error_dialog_ok_button_invoke_pattern));
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Failed to get invoke pattern for OK button on error dialog";
     return false;
@@ -465,24 +663,30 @@ bool SendKeysCommandHandler::DismissFileSelectionErrorDialog(IUIAutomation* ui_a
   return true;
 }
 
-bool SendKeysCommandHandler::DismissFileSelectionDialog(IUIAutomation* ui_automation, IUIAutomationElement* file_selection_dialog) {
+bool SendKeysCommandHandler::DismissFileSelectionDialog(IUIAutomation* ui_automation,
+                                                        IUIAutomationElement* file_selection_dialog) {
   CComVariant cancel_button_automation_id(L"2");
   CComPtr<IUIAutomationCondition> cancel_button_condition;
-  HRESULT hr = ui_automation->CreatePropertyCondition(UIA_AutomationIdPropertyId, cancel_button_automation_id, &cancel_button_condition);
+  HRESULT hr = ui_automation->CreatePropertyCondition(UIA_AutomationIdPropertyId,
+                                                      cancel_button_automation_id,
+                                                      &cancel_button_condition);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Could not create condition to look for cancel button";
     return false;
   }
 
   CComPtr<IUIAutomationElement> cancel_button;
-  hr = file_selection_dialog->FindFirst(TreeScope::TreeScope_Children, cancel_button_condition, &cancel_button);
+  hr = file_selection_dialog->FindFirst(TreeScope::TreeScope_Children,
+                                        cancel_button_condition,
+                                        &cancel_button);
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Failed to get cancel button on current dialog";
     return false;
   }
 
   CComPtr<IUIAutomationInvokePattern> cancel_button_invoke_pattern;
-  hr = cancel_button->GetCurrentPatternAs(UIA_InvokePatternId, IID_PPV_ARGS(&cancel_button_invoke_pattern));
+  hr = cancel_button->GetCurrentPatternAs(UIA_InvokePatternId,
+                                          IID_PPV_ARGS(&cancel_button_invoke_pattern));
   if (FAILED(hr)) {
     LOGHR(WARN, hr) << "Failed to get invoke pattern for cancel button on current dialog";
     return false;
@@ -495,6 +699,28 @@ bool SendKeysCommandHandler::DismissFileSelectionDialog(IUIAutomation* ui_automa
   }
 
   return true;
+}
+
+std::vector<HWND> SendKeysCommandHandler::FindWindowCandidates(FileNameData* file_data) {
+  // Find a dialog parent window with a class name of "Alternate
+  // Modal Top Most" belonging to the same process as the IE
+  // content process. If we find one, add it to the list of 
+  // window handles that might be the file selection dialog's
+  // direct parent.
+
+  DialogParentWindowInfo window_info;
+  window_info.process_id = file_data->ieProcId;
+  window_info.class_name = L"Alternate Modal Top Most";
+  window_info.window_handle = NULL;
+  ::EnumWindows(&SendKeysCommandHandler::FindWindowWithClassNameAndProcess,
+                reinterpret_cast<LPARAM>(&window_info));
+  std::vector<HWND> window_handles;
+  if (window_info.window_handle != NULL) {
+    LOG(INFO) << "found \"" << window_info.class_name << "\" " << window_info.window_handle;
+    window_handles.push_back(window_info.window_handle);
+  }
+  window_handles.push_back(file_data->main);
+  return window_handles;
 }
 
 bool SendKeysCommandHandler::SendFileNameKeys(FileNameData* file_data) {
@@ -511,32 +737,20 @@ bool SendKeysCommandHandler::SendFileNameKeys(FileNameData* file_data) {
     return false;
   }
 
-  // Find a dialog parent window with a class name of "Alternate
-  // Modal Top Most" belonging to the same process as the IE
-  // content process. If we find one, add it to the list of 
-  // window handles that might be the file selection dialog's
-  // direct parent.
-  DialogParentWindowInfo window_info;
-  window_info.process_id = file_data->ieProcId;
-  window_info.class_name = L"Alternate Modal Top Most";
-  window_info.window_handle = NULL;
-  ::EnumWindows(&SendKeysCommandHandler::FindWindowWithClassNameAndProcess,
-                reinterpret_cast<LPARAM>(&window_info));
-  
-  std::vector<HWND> window_handles;
-  if (window_info.window_handle != NULL) {
-    window_handles.push_back(window_info.window_handle);
-  }
-  window_handles.push_back(file_data->main);
-
+  std::vector<HWND> window_handles = FindWindowCandidates(file_data);
   // Find all candidates for the file selection dialog. Retry until timeout.
   int max_retries = file_data->dialogTimeout / 100;
   CComPtr<IUIAutomationElementArray> dialog_candidates;
-  bool dialog_candidates_found = GetFileSelectionDialogCandidates(window_handles, ui_automation, &dialog_candidates);
+  bool dialog_candidates_found = GetFileSelectionDialogCandidates(window_handles,
+                                                                  ui_automation,
+                                                                  &dialog_candidates);
   while (!dialog_candidates_found && --max_retries) {
     dialog_candidates.Release();
     ::Sleep(100);
-    dialog_candidates_found = GetFileSelectionDialogCandidates(window_handles, ui_automation, &dialog_candidates);
+    window_handles = FindWindowCandidates(file_data);
+    dialog_candidates_found = GetFileSelectionDialogCandidates(window_handles,
+                                                               ui_automation,
+                                                               &dialog_candidates);
   }
 
   if (!dialog_candidates_found) {
@@ -563,7 +777,8 @@ bool SendKeysCommandHandler::SendFileNameKeys(FileNameData* file_data) {
     if (!AcceptFileSelection(ui_automation, file_selection_dialog)) {
       continue;
     }
-    if (WaitForFileSelectionDialogClose(file_data->dialogTimeout, file_selection_dialog)) {
+    if (WaitForFileSelectionDialogClose(file_data->dialogTimeout,
+                                        file_selection_dialog)) {
       // Full success case. Break out of loop and return true.
       break;
     }
@@ -574,7 +789,9 @@ bool SendKeysCommandHandler::SendFileNameKeys(FileNameData* file_data) {
     // browser. Check for an error dialog, and if one is found, dismiss it and the file
     // selection dialog so as not to hang the driver.
     CComPtr<IUIAutomationElement> error_dialog;
-    if (!FindFileSelectionErrorDialog(ui_automation, file_selection_dialog, &error_dialog)) {
+    if (!FindFileSelectionErrorDialog(ui_automation,
+                                      file_selection_dialog,
+                                      &error_dialog)) {
       error_text = L"The driver found the file selection dialog, set the file information, and clicked the open button, but the dialog did not close in a timely manner.";
       return false;
     }
@@ -787,9 +1004,8 @@ bool SendKeysCommandHandler::LegacySendKeysToFileUploadAlert(
   return false;
 }
 
-bool SendKeysCommandHandler::VerifyPageHasFocus(
-    HWND top_level_window_handle, 
-    HWND browser_pane_window_handle) {
+bool SendKeysCommandHandler::VerifyPageHasFocus(BrowserHandle browser_wrapper) {
+  HWND browser_pane_window_handle = browser_wrapper->GetContentWindowHandle();
   DWORD proc;
   DWORD thread_id = ::GetWindowThreadProcessId(browser_pane_window_handle, &proc);
   GUITHREADINFO info;
@@ -821,8 +1037,9 @@ bool SendKeysCommandHandler::VerifyPageHasFocus(
   return info.hwndFocus == browser_pane_window_handle;
 }
 
-bool SendKeysCommandHandler::WaitUntilElementFocused(IHTMLElement* element) {
+bool SendKeysCommandHandler::WaitUntilElementFocused(ElementHandle element_wrapper) {
   // Check we have focused the element.
+  CComPtr<IHTMLElement> element = element_wrapper->element();
   bool has_focus = false;
   CComPtr<IDispatch> dispatch;
   element->get_document(&dispatch);
@@ -833,13 +1050,14 @@ bool SendKeysCommandHandler::WaitUntilElementFocused(IHTMLElement* element) {
   CComPtr<IHTMLElement> active_element;
   if (document->get_activeElement(&active_element) == S_OK) {
     if (active_element.IsEqualObject(element)) {
+      if (this->IsContentEditable(element)) {
+        this->SetElementFocus(element);
+      }
       return true;
     }
   }
 
-  CComPtr<IHTMLElement2> element2;
-  element->QueryInterface<IHTMLElement2>(&element2);
-  element2->focus();
+  this->SetElementFocus(element);
 
   // Hard-coded 1 second timeout here. Possible TODO is make this adjustable.
   clock_t max_wait = clock() + CLOCKS_PER_SEC;
@@ -847,6 +1065,8 @@ bool SendKeysCommandHandler::WaitUntilElementFocused(IHTMLElement* element) {
     WindowUtilities::Wait(1);
     CComPtr<IHTMLElement> active_wait_element;
     if (document->get_activeElement(&active_wait_element) == S_OK && active_wait_element != NULL) {
+      CComPtr<IHTMLElement2> element2;
+      element->QueryInterface<IHTMLElement2>(&element2);
       CComPtr<IHTMLElement2> active_wait_element2;
       active_wait_element->QueryInterface<IHTMLElement2>(&active_wait_element2);
       if (element2.IsEqualObject(active_wait_element2)) {
@@ -872,13 +1092,7 @@ bool SendKeysCommandHandler::SetInsertionPoint(IHTMLElement* element) {
     if (SUCCEEDED(hr) && text_area_element) {
       text_area_element->createTextRange(&range);
     } else {
-      CComPtr<IHTMLElement3> element3;
-      element->QueryInterface<IHTMLElement3>(&element3);
-      VARIANT_BOOL is_content_editable_variant = VARIANT_FALSE;
-      if (element3) {
-        element3->get_isContentEditable(&is_content_editable_variant);
-      }
-      bool is_content_editable = is_content_editable_variant == VARIANT_TRUE;
+      bool is_content_editable = this->IsContentEditable(element);
       if (is_content_editable) {
         CComPtr<IDispatch> dispatch;
         hr = element->get_document(&dispatch);
@@ -909,6 +1123,22 @@ bool SendKeysCommandHandler::SetInsertionPoint(IHTMLElement* element) {
   }
 
   return false;
+}
+
+bool SendKeysCommandHandler::IsContentEditable(IHTMLElement* element) {
+  CComPtr<IHTMLElement3> element3;
+  element->QueryInterface<IHTMLElement3>(&element3);
+  VARIANT_BOOL is_content_editable_variant = VARIANT_FALSE;
+  if (element3) {
+    element3->get_isContentEditable(&is_content_editable_variant);
+  }
+  return is_content_editable_variant == VARIANT_TRUE;
+}
+
+void SendKeysCommandHandler::SetElementFocus(IHTMLElement* element) {
+  CComPtr<IHTMLElement2> element2;
+  element->QueryInterface<IHTMLElement2>(&element2);
+  element2->focus();
 }
 
 } // namespace webdriver

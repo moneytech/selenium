@@ -42,6 +42,7 @@ const W3C_CAPABILITY_NAMES = new Set([
     'proxy',
     'setWindowRect',
     'timeouts',
+    'strictFileInteractability',
     'unhandledPromptBehavior',
 ]);
 
@@ -219,6 +220,15 @@ function fromWireValue(driver, value) {
     value = result;
   }
   return value;
+}
+
+/**
+ * Resolves a wait message from either a function or a string.
+ * @param {(string|Function)=} message An optional message to use if the wait times out.
+ * @return {string} The resolved message
+ */
+function resolveWaitMessage(message) {
+  return message ? `${typeof message === 'function' ? message() : message}\n` : '';
 }
 
 
@@ -432,8 +442,11 @@ class IWebDriver {
    *           function(!WebDriver): T)} condition The condition to
    *     wait on, defined as a promise, condition object, or  a function to
    *     evaluate as a condition.
-   * @param {number=} timeout How long to wait for the condition to be true.
-   * @param {string=} message An optional message to use if the wait times out.
+   * @param {number=} timeout The duration in milliseconds, how long to wait
+   *     for the condition to be true.
+   * @param {(string|Function)=} message An optional message to use if the wait times out.
+   * @param {number=} pollTimeout The duration in milliseconds, how long to
+   *     wait between polling the condition.
    * @return {!(IThenable<T>|WebElementPromise)} A promise that will be
    *     resolved with the first truthy value returned by the condition
    *     function, or rejected if the condition times out. If the input
@@ -442,7 +455,7 @@ class IWebDriver {
    * @throws {TypeError} if the provided `condition` is not a valid type.
    * @template T
    */
-  wait(condition, timeout = undefined, message = undefined) {}
+  wait(condition, timeout = undefined, message = undefined, pollTimeout = undefined) {}
 
   /**
    * Makes the driver sleep for the given amount of time.
@@ -514,7 +527,7 @@ class IWebDriver {
 
   /**
    * Locates an element on the page. If the element cannot be found, a
-   * {@link error.NoSuchEementError} will be returned by the driver.
+   * {@link error.NoSuchElementError} will be returned by the driver.
    *
    * This function should not be used to test whether an element is present on
    * the page. Rather, you should use {@link #findElements}:
@@ -618,8 +631,8 @@ function filterNonW3CCaps(capabilities) {
  */
 class WebDriver {
   /**
-   * @param {!(Session|IThenable<!Session>)} session Either a known session or a
-   *     promise that will be resolved to a session.
+   * @param {!(./session.Session|IThenable<!./session.Session>)} session Either
+   *     a known session or a promise that will be resolved to a session.
    * @param {!command.Executor} executor The executor to use when sending
    *     commands to the browser.
    * @param {(function(this: void): ?)=} onQuit A function to call, if any,
@@ -764,9 +777,13 @@ class WebDriver {
   }
 
   /** @override */
-  wait(condition, timeout = 0, message = undefined) {
+  wait(condition, timeout = 0, message = undefined, pollTimeout = 200) {
     if (typeof timeout !== 'number' || timeout < 0) {
       throw TypeError('timeout must be a number >= 0: ' + timeout);
+    }
+
+    if (typeof pollTimeout !== 'number' || pollTimeout < 0) {
+      throw TypeError('pollTimeout must be a number >= 0: ' + pollTimeout);
     }
 
     if (promise.isPromise(condition)) {
@@ -779,11 +796,13 @@ class WebDriver {
         let start = Date.now();
         let timer = setTimeout(function() {
           timer = null;
-          reject(
-              new error.TimeoutError(
-                  (message ? `${message}\n` : '')
-                      + 'Timed out waiting for promise to resolve after '
-                      + (Date.now() - start) + 'ms'));
+          try {
+            let timeoutMessage = resolveWaitMessage(message);
+            reject(new error.TimeoutError(`${timeoutMessage}Timed out waiting for promise to resolve after ${Date.now() - start}ms`));
+          }
+          catch (ex) {
+            reject(new error.TimeoutError(`${ex.message}\nTimed out waiting for promise to resolve after ${Date.now() - start}ms`));
+          }
         }, timeout);
         const clearTimer = () => timer && clearTimeout(timer);
 
@@ -830,12 +849,15 @@ class WebDriver {
           if (!!value) {
             resolve(value);
           } else if (timeout && elapsed >= timeout) {
-            reject(
-                new error.TimeoutError(
-                  (message ? `${message}\n` : '')
-                        + `Wait timed out after ${elapsed}ms`));
+            try {
+              let timeoutMessage = resolveWaitMessage(message);
+              reject(new error.TimeoutError(`${timeoutMessage}Wait timed out after ${elapsed}ms`));
+            }
+            catch (ex) {
+              reject(new error.TimeoutError(`${ex.message}\nWait timed out after ${elapsed}ms`));
+            }
           } else {
-            setTimeout(pollCondition, 0);
+            setTimeout(pollCondition, pollTimeout);
           }
         }, reject);
       };
@@ -1103,7 +1125,7 @@ class Options {
    *     invalid.
    * @throws {TypeError} if `spec` is not a cookie object.
    */
-  addCookie({name, value, path, domain, secure, httpOnly, expiry}) {
+  addCookie({name, value, path, domain, secure, httpOnly, expiry, sameSite}) {
     // We do not allow '=' or ';' in the name.
     if (/[;=]/.test(name)) {
       throw new error.InvalidArgumentError(
@@ -1123,6 +1145,11 @@ class Options {
       expiry = Math.floor(date.getTime() / 1000);
     }
 
+    if(sameSite && sameSite !== 'Strict' && sameSite !== 'Lax') {
+      throw new error.InvalidArgumentError(
+          `Invalid sameSite cookie value '${sameSite}'. It should be either "Lax" (or) "Strict" `);
+    }
+
     return this.driver_.execute(
         new command.Command(command.Name.ADD_COOKIE).
             setParameter('cookie', {
@@ -1132,7 +1159,8 @@ class Options {
               'domain': domain,
               'secure': !!secure,
               'httpOnly': !!httpOnly,
-              'expiry': expiry
+              'expiry': expiry,
+              'sameSite': sameSite
             }));
   }
 
@@ -1180,7 +1208,8 @@ class Options {
    *
    * @param {string} name The name of the cookie to retrieve.
    * @return {!Promise<?Options.Cookie>} A promise that will be resolved
-   *     with the named cookie, or `null` if there is no such cookie.
+   *     with the named cookie
+   * @throws {error.NoSuchCookieError} if there is no such cookie.
    */
   async getCookie(name) {
     try {
@@ -1391,6 +1420,17 @@ Options.Cookie.prototype.expiry;
 
 
 /**
+ * When the cookie applies to a SameSite policy.
+ *
+ * When {@linkplain Options#addCookie() adding a cookie}, this may be specified
+ * as a {@link string} object which is either 'Lax' or 'Strict'.
+ *
+ *
+ * @type {(!Date|number|undefined)}
+ */
+Options.Cookie.prototype.sameSite;
+
+/**
  * An interface for managing the current window.
  *
  * This class should never be instantiated directly. Instead, obtain an instance
@@ -1440,8 +1480,8 @@ class Window {
 
   /**
    * Sets the current top-level window's size and position. You may update just
-   * the size by omitting `width` & `height`, or just the position by omitting
-   * `x` & `y` options.
+   * the size by omitting `x` & `y`, or just the position by omitting
+   * `width` & `height` options.
    *
    * @param {{x: (number|undefined),
    *          y: (number|undefined),
@@ -1692,6 +1732,27 @@ class TargetLocator {
   }
 
   /**
+   * Creates a new browser window and switches the focus for future
+   * commands of this driver to the new window.
+   *
+   * @param {string} typeHint 'window' or 'tab'. The created window is not
+   *     guaranteed to be of the requested type; if the driver does not support
+   *     the requested type, a new browser window will be created of whatever type
+   *     the driver does support.
+   * @return {!Promise<void>} A promise that will be resolved
+   *     when the driver has changed focus to the new window.
+   */
+  newWindow(typeHint) {
+    var driver = this.driver_
+    return this.driver_.execute(
+        new command.Command(command.Name.SWITCH_TO_NEW_WINDOW).
+            setParameter('type', typeHint)
+        ).then(function(response) {
+          return driver.switchTo().window(response.handle);
+        });
+  }
+
+  /**
    * Changes focus to the active modal dialog, such as those opened by
    * `window.alert()`, `window.confirm()`, and `window.prompt()`. The returned
    * promise will be rejected with a
@@ -1796,7 +1857,8 @@ class WebElement {
     if (a === b) {
       return true;
     }
-    return a.driver_.executeScript('arguments[0] === arguments[1]', a, b);
+    return a.driver_.executeScript(
+      'return arguments[0] === arguments[1]', a, b);
   }
 
   /** @return {!WebDriver} The parent driver for this instance. */
@@ -2068,6 +2130,17 @@ class WebElement {
     return this.execute_(
         new command.Command(command.Name.GET_ELEMENT_ATTRIBUTE).
             setParameter('name', attributeName));
+  }
+
+  /**
+   * Get the given property of the referenced web element
+   * @param {string} propertyName The name of the attribute to query.
+   * @return {!Promise<string>} A promise that will be
+   *     resolved with the element's property value
+   */
+  getProperty(propertyName) {
+    return this.execute_(
+        new command.Command(command.Name.GET_ELEMENT_PROPERTY).setParameter('name', propertyName));
   }
 
   /**

@@ -18,18 +18,19 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
+using OpenQA.Selenium.Internal;
 
 namespace OpenQA.Selenium.Remote
 {
     /// <summary>
-    /// Class to Create the capabilities of the browser you require for <see cref="IWebDriver"/>.
-    /// If you wish to use default values use the static methods
+    /// Internal class to specify the requested capabilities of the browser for <see cref="IWebDriver"/>.
     /// </summary>
-    public class DesiredCapabilities : ICapabilities, ISpecificationCompliant
+    [Obsolete("Use of DesiredCapabilities has been deprecated in favor of browser-specific Options classes")]
+    internal class DesiredCapabilities : IWritableCapabilities, IHasCapabilitiesDictionary
     {
         private readonly Dictionary<string, object> capabilities = new Dictionary<string, object>();
-        private bool isSpecCompliant;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DesiredCapabilities"/> class
@@ -101,7 +102,6 @@ namespace OpenQA.Selenium.Remote
             this.SetCapability(CapabilityType.BrowserName, browser);
             this.SetCapability(CapabilityType.Version, version);
             this.SetCapability(CapabilityType.Platform, platform);
-            this.isSpecCompliant = isSpecCompliant;
         }
 
         /// <summary>
@@ -163,14 +163,14 @@ namespace OpenQA.Selenium.Remote
         {
             get
             {
-              bool acceptSSLCerts = false;
-              object capabilityValue = this.GetCapability(CapabilityType.AcceptInsecureCertificates);
-              if (capabilityValue != null)
-              {
-                acceptSSLCerts = (bool)capabilityValue;
-              }
+                bool acceptSSLCerts = false;
+                object capabilityValue = this.GetCapability(CapabilityType.AcceptInsecureCertificates);
+                if (capabilityValue != null)
+                {
+                    acceptSSLCerts = (bool)capabilityValue;
+                }
 
-              return acceptSSLCerts;
+                return acceptSSLCerts;
             }
 
             set
@@ -180,155 +180,40 @@ namespace OpenQA.Selenium.Remote
         }
 
         /// <summary>
-        /// Gets or sets a value indicating whether this set of capabilities is compliant with the W3C WebDriver specification.
+        /// Gets the underlying Dictionary for a given set of capabilities.
         /// </summary>
-        bool ISpecificationCompliant.IsSpecificationCompliant
+        IDictionary<string, object> IHasCapabilitiesDictionary.CapabilitiesDictionary
         {
-            get { return this.isSpecCompliant; }
-            set { this.isSpecCompliant = value; }
+            get { return this.CapabilitiesDictionary; }
         }
 
         /// <summary>
-        /// Gets the internal capabilities dictionary.
+        /// Gets the underlying Dictionary for a given set of capabilities.
         /// </summary>
-        internal Dictionary<string, object> CapabilitiesDictionary
+        internal IDictionary<string, object> CapabilitiesDictionary
         {
-            get { return this.capabilities; }
+            get { return new ReadOnlyDictionary<string, object>(this.capabilities); }
         }
 
         /// <summary>
-        /// Method to return a new DesiredCapabilities using defaults
+        /// Gets the capability value with the specified name.
         /// </summary>
-        /// <returns>New instance of DesiredCapabilities for use with Firefox</returns>
-        [Obsolete("Use the FirefoxOptions class to set capabilities for use with Firefox. For use with the Java remote server or grid, use the ToCapabilites method of the FirefoxOptions class.")]
-        public static DesiredCapabilities Firefox()
+        /// <param name="capabilityName">The name of the capability to get.</param>
+        /// <returns>The value of the capability.</returns>
+        /// <exception cref="ArgumentException">
+        /// The specified capability name is not in the set of capabilities.
+        /// </exception>
+        public object this[string capabilityName]
         {
-            DesiredCapabilities dc = new DesiredCapabilities("firefox", string.Empty, new Platform(PlatformType.Any));
-            dc.AcceptInsecureCerts = true;
-            return dc;
-        }
+            get
+            {
+                if (!this.capabilities.ContainsKey(capabilityName))
+                {
+                    throw new ArgumentException(string.Format(CultureInfo.InvariantCulture, "The capability {0} is not present in this set of capabilities", capabilityName));
+                }
 
-        /// <summary>
-        /// Method to return a new DesiredCapabilities using defaults
-        /// </summary>
-        /// <returns>New instance of DesiredCapabilities for use with Firefox</returns>
-        public static DesiredCapabilities PhantomJS()
-        {
-            DesiredCapabilities dc = new DesiredCapabilities("phantomjs", string.Empty, new Platform(PlatformType.Any));
-            dc.isSpecCompliant = false;
-            return dc;
-        }
-
-        /// <summary>
-        /// Method to return a new DesiredCapabilities using defaults
-        /// </summary>
-        /// <returns>New instance of DesiredCapabilities for use with Internet Explorer</returns>
-        [Obsolete("Use the InternetExplorerOptions class to set capabilities for use with Internet Explorer. For use with the Java remote server or grid, use the ToCapabilites method of the InternetExplorerOptions class.")]
-        public static DesiredCapabilities InternetExplorer()
-        {
-            return new DesiredCapabilities("internet explorer", string.Empty, new Platform(PlatformType.Windows));
-        }
-
-        /// <summary>
-        /// Method to return a new DesiredCapabilities using defaults
-        /// </summary>
-        /// <returns>New instance of DesiredCapabilities for use with Microsoft Edge</returns>
-        [Obsolete("Use the EdgeOptions class to set capabilities for use with Edge. For use with the Java remote server or grid, use the ToCapabilites method of the EdgeOptions class.")]
-        public static DesiredCapabilities Edge()
-        {
-            DesiredCapabilities dc = new DesiredCapabilities("MicrosoftEdge", string.Empty, new Platform(PlatformType.Windows));
-            dc.isSpecCompliant = false;
-            return dc;
-        }
-
-        /// <summary>
-        /// Method to return a new DesiredCapabilities using defaults
-        /// </summary>
-        /// <returns>New instance of DesiredCapabilities for use with HTMLUnit</returns>
-        public static DesiredCapabilities HtmlUnit()
-        {
-            DesiredCapabilities dc = new DesiredCapabilities("htmlunit", string.Empty, new Platform(PlatformType.Any));
-            dc.isSpecCompliant = false;
-            return dc;
-        }
-
-        /// <summary>
-        /// Method to return a new DesiredCapabilities using defaults
-        /// </summary>
-        /// <returns>New instance of DesiredCapabilities for use with HTMLUnit with JS</returns>
-        public static DesiredCapabilities HtmlUnitWithJavaScript()
-        {
-            DesiredCapabilities dc = new DesiredCapabilities("htmlunit", string.Empty, new Platform(PlatformType.Any));
-            dc.SetCapability(CapabilityType.IsJavaScriptEnabled, true);
-            dc.isSpecCompliant = false;
-            return dc;
-        }
-
-        /// <summary>
-        /// Method to return a new DesiredCapabilities using defaults
-        /// </summary>
-        /// <returns>New instance of DesiredCapabilities for use with iPhone</returns>
-        [Obsolete("Selenium no longer provides an iOS device driver.")]
-        public static DesiredCapabilities IPhone()
-        {
-            return new DesiredCapabilities("iPhone", string.Empty, new Platform(PlatformType.Mac));
-        }
-
-        /// <summary>
-        /// Method to return a new DesiredCapabilities using defaults
-        /// </summary>
-        /// <returns>New instance of DesiredCapabilities for use with iPad</returns>
-        [Obsolete("Selenium no longer provides an iOS device driver.")]
-        public static DesiredCapabilities IPad()
-        {
-            return new DesiredCapabilities("iPad", string.Empty, new Platform(PlatformType.Mac));
-        }
-
-        /// <summary>
-        /// Method to return a new DesiredCapabilities using defaults
-        /// </summary>
-        /// <returns>New instance of DesiredCapabilities for use with Chrome</returns>
-        [Obsolete("Use the ChromeOptions class to set capabilities for use with Chrome. For use with the Java remote server or grid, use the ToCapabilites method of the ChromeOptions class.")]
-        public static DesiredCapabilities Chrome()
-        {
-            // This is strangely inconsistent.
-            DesiredCapabilities dc = new DesiredCapabilities("chrome", string.Empty, new Platform(PlatformType.Any));
-            dc.isSpecCompliant = false;
-            return dc;
-        }
-
-        /// <summary>
-        /// Method to return a new DesiredCapabilities using defaults
-        /// </summary>
-        /// <returns>New instance of DesiredCapabilities for use with Android</returns>
-        [Obsolete("Selenium no longer provides an Android device driver.")]
-        public static DesiredCapabilities Android()
-        {
-            return new DesiredCapabilities("android", string.Empty, new Platform(PlatformType.Android));
-        }
-
-        /// <summary>
-        /// Method to return a new DesiredCapabilities using defaults
-        /// </summary>
-        /// <returns>New instance of DesiredCapabilities for use with Opera</returns>
-        [Obsolete("Use the OperaOptions class to set capabilities for use with Opera. For use with the Java remote server or grid, use the ToCapabilites method of the OperaOptions class.")]
-        public static DesiredCapabilities Opera()
-        {
-            DesiredCapabilities dc = new DesiredCapabilities("opera", string.Empty, new Platform(PlatformType.Any));
-            dc.isSpecCompliant = false;
-            return dc;
-        }
-
-        /// <summary>
-        /// Method to return a new DesiredCapabilities using defaults
-        /// </summary>
-        /// <returns>New instance of DesiredCapabilities for use with Safari</returns>
-        [Obsolete("Use the SafariOptions class to set capabilities for use with Safari. For use with the Java remote server or grid, use the ToCapabilites method of the SafariOptions class.")]
-        public static DesiredCapabilities Safari()
-        {
-            DesiredCapabilities dc = new DesiredCapabilities("safari", string.Empty, new Platform(PlatformType.Mac));
-            dc.isSpecCompliant = false;
-            return dc;
+                return this.capabilities[capabilityName];
+            }
         }
 
         /// <summary>
@@ -382,17 +267,6 @@ namespace OpenQA.Selenium.Remote
             {
                 this.capabilities[capability] = capabilityValue;
             }
-        }
-
-        /// <summary>
-        /// Converts the <see cref="ICapabilities"/> object to a <see cref="Dictionary{TKey, TValue}"/>.
-        /// </summary>
-        /// <returns>The <see cref="Dictionary{TKey, TValue}"/> containing the capabilities.</returns>
-        public Dictionary<string, object> ToDictionary()
-        {
-            // CONSIDER: Instead of returning the raw internal member,
-            // we might want to copy/clone it instead.
-            return this.capabilities;
         }
 
         /// <summary>
@@ -451,6 +325,16 @@ namespace OpenQA.Selenium.Remote
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Returns a read-only version of this capabilities object.
+        /// </summary>
+        /// <returns>A read-only version of this capabilities object.</returns>
+        public ICapabilities AsReadOnly()
+        {
+            ReadOnlyDesiredCapabilities readOnlyCapabilities = new ReadOnlyDesiredCapabilities(this);
+            return readOnlyCapabilities;
         }
     }
 }

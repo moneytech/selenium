@@ -17,18 +17,14 @@
 
 package org.openqa.selenium.support.ui;
 
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 /**
  * Abstraction around {@link Thread#sleep(long)} to permit better testability.
  */
 public interface Sleeper {
 
-  public static final Sleeper SYSTEM_SLEEPER = new Sleeper() {
-    public void sleep(Duration duration) throws InterruptedException {
-      Thread.sleep(duration.in(TimeUnit.MILLISECONDS));
-    }
-  };
+  Sleeper SYSTEM_SLEEPER = duration -> Thread.sleep(duration.toMillis());
 
   /**
    * Sleeps for the specified duration of time.

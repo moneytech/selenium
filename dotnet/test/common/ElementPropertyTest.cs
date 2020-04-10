@@ -10,27 +10,19 @@ namespace OpenQA.Selenium
     public class ElementPropertyTest : DriverTestFixture
     {
         [Test]
-        [IgnoreBrowser(Browser.Edge)]
-        [IgnoreBrowser(Browser.Chrome)]
         [IgnoreBrowser(Browser.Opera)]
-        [IgnoreBrowser(Browser.PhantomJS)]
         [IgnoreBrowser(Browser.Remote)]
-        [IgnoreBrowser(Browser.Safari)]
         public void ShouldReturnNullWhenGettingTheValueOfAPropertyThatIsNotListed()
         {
             driver.Url = simpleTestPage;
             IWebElement head = driver.FindElement(By.XPath("/html"));
             string attribute = head.GetProperty("cheese");
-            Assert.IsNull(attribute);
+            Assert.That(attribute, Is.Null);
         }
 
         [Test]
-        [IgnoreBrowser(Browser.Edge)]
-        [IgnoreBrowser(Browser.Chrome)]
         [IgnoreBrowser(Browser.Opera)]
-        [IgnoreBrowser(Browser.PhantomJS)]
         [IgnoreBrowser(Browser.Remote)]
-        [IgnoreBrowser(Browser.Safari)]
         public void CanRetrieveTheCurrentValueOfAProperty()
         {
             driver.Url = formsPage;

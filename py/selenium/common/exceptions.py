@@ -40,18 +40,6 @@ class WebDriverException(Exception):
         return exception_msg
 
 
-class ErrorInResponseException(WebDriverException):
-    """
-    Thrown when an error has occurred on the server side.
-
-    This may happen when communicating with the firefox extension
-    or the remote driver server.
-    """
-    def __init__(self, response, msg):
-        WebDriverException.__init__(self, msg)
-        self.response = response
-
-
 class InvalidSwitchToTargetException(WebDriverException):
     """
     Thrown when frame or window target to be switched doesn't exist.
@@ -124,16 +112,19 @@ class StaleElementReferenceException(WebDriverException):
 
 class InvalidElementStateException(WebDriverException):
     """
+    Thrown when a command could not be completed because the element is in an invalid state.
+
+    This can be caused by attempting to clear an element that isn't both editable and resettable.
     """
     pass
 
 
 class UnexpectedAlertPresentException(WebDriverException):
     """
-    Thrown when an unexpected alert is appeared.
+    Thrown when an unexpected alert has appeared.
 
-    Usually raised when when an expected modal is blocking webdriver form executing any
-    more commands.
+    Usually raised when  an unexpected modal is blocking the webdriver from executing
+    commands.
     """
     def __init__(self, msg=None, screen=None, stacktrace=None, alert_text=None):
         super(UnexpectedAlertPresentException, self).__init__(msg, screen, stacktrace)
@@ -319,6 +310,6 @@ class SessionNotCreatedException(WebDriverException):
 
 class UnknownMethodException(WebDriverException):
     """
-    The requested command matched a known URL but did not match an method for that URL.
+    The requested command matched a known URL but did not match any methods for that URL.
     """
     pass

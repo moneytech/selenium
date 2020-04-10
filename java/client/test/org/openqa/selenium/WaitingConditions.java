@@ -37,6 +37,7 @@ public class WaitingConditions {
       this.expectedValue = expectedValue;
     }
 
+    @Override
     public String apply(WebDriver ignored) {
       lastText = element.getText();
       if (compareText(expectedValue, lastText)) {
@@ -143,6 +144,7 @@ public class WaitingConditions {
     return new ExpectedCondition<Point>() {
       private Point currentLocation = new Point(0, 0);
 
+      @Override
       public Point apply(WebDriver ignored) {
         currentLocation = element.getLocation();
         if (currentLocation.equals(expectedLocation)) {
@@ -160,30 +162,16 @@ public class WaitingConditions {
   }
 
   public static ExpectedCondition<Set<String>> windowHandleCountToBe(final int count) {
-    return new ExpectedCondition<Set<String>>() {
-      public Set<String> apply(WebDriver driver) {
-        Set<String> handles = driver.getWindowHandles();
-
-        if (handles.size() == count) {
-          return handles;
-        }
-        return null;
-      }
+    return driver -> {
+      Set<String> handles = driver.getWindowHandles();
+      return handles.size() == count ? handles : null;
     };
   }
 
   public static ExpectedCondition<Set<String>> windowHandleCountToBeGreaterThan(final int count) {
-
-    return new ExpectedCondition<Set<String>>() {
-      @Override
-      public Set<String> apply(WebDriver driver) {
-        Set<String> handles = driver.getWindowHandles();
-
-        if (handles.size() > count) {
-          return handles;
-        }
-        return null;
-      }
+    return driver -> {
+      Set<String> handles = driver.getWindowHandles();
+      return handles.size() > count ? handles : null;
     };
   }
 

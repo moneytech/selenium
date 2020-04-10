@@ -17,18 +17,17 @@
 
 package org.openqa.selenium.interactions;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeFalse;
 import static org.openqa.selenium.WaitingConditions.elementLocationToBe;
-import static org.openqa.selenium.testing.Driver.CHROME;
-import static org.openqa.selenium.testing.Driver.FIREFOX;
-import static org.openqa.selenium.testing.Driver.HTMLUNIT;
-import static org.openqa.selenium.testing.Driver.IE;
-import static org.openqa.selenium.testing.Driver.MARIONETTE;
-import static org.openqa.selenium.testing.Driver.SAFARI;
+import static org.openqa.selenium.testing.drivers.Browser.CHROME;
+import static org.openqa.selenium.testing.drivers.Browser.EDGE;
+import static org.openqa.selenium.testing.drivers.Browser.FIREFOX;
+import static org.openqa.selenium.testing.drivers.Browser.HTMLUNIT;
+import static org.openqa.selenium.testing.drivers.Browser.IE;
+import static org.openqa.selenium.testing.drivers.Browser.MARIONETTE;
+import static org.openqa.selenium.testing.drivers.Browser.SAFARI;
 
 import org.junit.Test;
 import org.openqa.selenium.By;
@@ -39,23 +38,19 @@ import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.testing.Ignore;
 import org.openqa.selenium.testing.JUnit4TestBase;
-import org.openqa.selenium.testing.NeedsFreshDriver;
 import org.openqa.selenium.testing.NoDriverAfterTest;
+import org.openqa.selenium.testing.NotYetImplemented;
 import org.openqa.selenium.testing.SwitchToTopAfterTest;
 import org.openqa.selenium.testing.TestUtilities;
 import org.openqa.selenium.testing.drivers.Browser;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Ignore(value = HTMLUNIT, reason = "Advanced mouse actions only implemented in rendered browsers")
 public class DragAndDropTest extends JUnit4TestBase {
 
   @Test
   public void testDragAndDropRelative() {
-    assumeFalse("See issue 2281", TestUtilities.getEffectivePlatform().is(Platform.MAC));
-    assumeFalse(Browser.detect() == Browser.opera &&
-                TestUtilities.getEffectivePlatform().is(Platform.WINDOWS));
+    assumeFalse(Browser.detect() == Browser.OPERA &&
+                TestUtilities.getEffectivePlatform(driver).is(Platform.WINDOWS));
 
     driver.get(pages.dragAndDropPage);
     WebElement img = driver.findElement(By.id("test1"));
@@ -76,7 +71,7 @@ public class DragAndDropTest extends JUnit4TestBase {
     WebElement img1 = driver.findElement(By.id("test1"));
     WebElement img2 = driver.findElement(By.id("test2"));
     new Actions(driver).dragAndDrop(img2, img1).perform();
-    assertEquals(img1.getLocation(), img2.getLocation());
+    assertThat(img2.getLocation()).isEqualTo(img1.getLocation());
   }
 
   @SwitchToTopAfterTest
@@ -90,7 +85,7 @@ public class DragAndDropTest extends JUnit4TestBase {
     WebElement img1 = wait.until(ExpectedConditions.presenceOfElementLocated(By.id("test1")));
     WebElement img2 = driver.findElement(By.id("test2"));
     new Actions(driver).dragAndDrop(img2, img1).perform();
-    assertEquals(img1.getLocation(), img2.getLocation());
+    assertThat(img2.getLocation()).isEqualTo(img1.getLocation());
   }
 
   @SwitchToTopAfterTest
@@ -106,13 +101,15 @@ public class DragAndDropTest extends JUnit4TestBase {
 
     new Actions(driver).dragAndDropBy(img1, 20, 20).perform();
 
-    assertEquals(initial.moveBy(20, 20), img1.getLocation());
+    assertThat(img1.getLocation()).isEqualTo(initial.moveBy(20, 20));
   }
 
-  @NeedsFreshDriver // fails in Sauce if run in a dirty state; to be investigated
   @Test
   @Ignore(value = IE, reason = "IE fails this test if requireWindowFocus=true")
   @Ignore(MARIONETTE)
+  @NotYetImplemented(SAFARI)
+  @NotYetImplemented(EDGE)
+  @NotYetImplemented(CHROME)
   public void testDragAndDropElementWithOffsetInScrolledDiv() {
     driver.get(appServer.whereIs("dragAndDropInsideScrolledDiv.html"));
 
@@ -121,23 +118,19 @@ public class DragAndDropTest extends JUnit4TestBase {
 
     new Actions(driver).dragAndDropBy(el, 3700, 3700).perform();
 
-    assertEquals(initial.moveBy(3700, 3700), el.getLocation());
+    assertThat(el.getLocation()).isEqualTo(initial.moveBy(3700, 3700));
   }
 
   @Test
   public void testElementInDiv() {
-    assumeFalse("See issue 2281", TestUtilities.getEffectivePlatform().is(Platform.MAC));
-
     driver.get(pages.dragAndDropPage);
     WebElement img = driver.findElement(By.id("test3"));
     Point expectedLocation = img.getLocation();
     drag(img, expectedLocation, 100, 100);
-    assertEquals(expectedLocation, img.getLocation());
+    assertThat(img.getLocation()).isEqualTo(expectedLocation);
   }
 
   @Test
-  @Ignore(CHROME)
-  @Ignore(IE)
   @Ignore(FIREFOX)
   public void testDragTooFar() {
     driver.get(pages.dragAndDropPage);
@@ -161,6 +154,8 @@ public class DragAndDropTest extends JUnit4TestBase {
   // window, otherwise we are stuck with a small window for the rest of the tests.
   // TODO(dawagner): Remove @NoDriverAfterTest when we can reliably do window resizing
   @Test
+  @NotYetImplemented(SAFARI)
+  @NotYetImplemented(EDGE)
   public void testShouldAllowUsersToDragAndDropToElementsOffTheCurrentViewPort() {
     driver.get(pages.dragAndDropPage);
 
@@ -171,7 +166,7 @@ public class DragAndDropTest extends JUnit4TestBase {
     WebElement img = driver.findElement(By.id("test3"));
     Point expectedLocation = img.getLocation();
     drag(img, expectedLocation, 100, 100);
-    assertEquals(expectedLocation, img.getLocation());
+    assertThat(img.getLocation()).isEqualTo(expectedLocation);
   }
 
   private void drag(WebElement elem, Point expectedLocation,
@@ -203,23 +198,19 @@ public class DragAndDropTest extends JUnit4TestBase {
       text = dropInto.findElement(By.tagName("p")).getText();
     }
 
-    assertEquals("Dropped!", text);
+    assertThat(text).isEqualTo("Dropped!");
 
     WebElement reporter = driver.findElement(By.id("drop_reports"));
     // Assert that only one mouse click took place and the mouse was moved
     // during it.
-    String reporterText = reporter.getText();
-    Pattern pattern = Pattern.compile("start( move)* down( move)+ up( move)*");
-
-    Matcher matcher = pattern.matcher(reporterText);
-
-    assertTrue("Reporter text:" + reporterText, matcher.matches());
+    assertThat(reporter.getText()).matches("start( move)* down( move)+ up( move)*");
   }
 
   @Test
   @Ignore(value = IE, reason = "IE fails this test if requireWindowFocus=true")
-  @Ignore(SAFARI)
+  @NotYetImplemented(SAFARI)
   @Ignore(MARIONETTE)
+  @NotYetImplemented(EDGE)
   public void canDragAnElementNotVisibleInTheCurrentViewportDueToAParentOverflow() {
     driver.get(pages.dragDropOverflow);
 
@@ -230,11 +221,11 @@ public class DragAndDropTest extends JUnit4TestBase {
     Point targetLocation = dragTo.getLocation();
 
     int yOffset = targetLocation.getY() - srcLocation.getY();
-    assertNotEquals(0, yOffset);
+    assertThat(yOffset).isNotEqualTo(0);
 
     new Actions(driver).dragAndDropBy(toDrag, 0, yOffset).perform();
 
-    assertEquals(dragTo.getLocation(), toDrag.getLocation());
+    assertThat(toDrag.getLocation()).isEqualTo(dragTo.getLocation());
   }
 
   private static void sleep(int ms) {

@@ -34,6 +34,11 @@ except NameError:
     pass
 
 try:
+    from base64 import encodebytes
+except ImportError:  # 3+
+    from base64 import encodestring as encodebytes
+
+try:
     from StringIO import StringIO as IOStream
 except ImportError:  # 3+
     from io import BytesIO as IOStream
@@ -101,9 +106,10 @@ class WebElement(object):
         :Args:
             - name - Name of the property to retrieve.
 
-        Example::
+        :Usage:
+            ::
 
-            text_length = target_element.get_property("text_length")
+                text_length = target_element.get_property("text_length")
         """
         try:
             return self._execute(Command.GET_ELEMENT_PROPERTY, {"name": name})["value"]
@@ -162,7 +168,7 @@ class WebElement(object):
         """Finds element within this element's children by ID.
 
         :Args:
-         - id\_ - ID of child element to locate.
+         - id\\_ - ID of child element to locate.
 
         :Returns:
          - WebElement - the element if it was found
@@ -171,8 +177,11 @@ class WebElement(object):
          - NoSuchElementException - if the element wasn't found
 
         :Usage:
-            foo_element = element.find_element_by_id('foo')
+            ::
+
+                foo_element = element.find_element_by_id('foo')
         """
+        warnings.warn("find_element_by_* commands are deprecated. Please use find_element() instead")
         return self.find_element(by=By.ID, value=id_)
 
     def find_elements_by_id(self, id_):
@@ -180,15 +189,18 @@ class WebElement(object):
         Will return a list of webelements if found, or an empty list if not.
 
         :Args:
-         - id\_ - Id of child element to find.
+         - id\\_ - Id of child element to find.
 
         :Returns:
          - list of WebElement - a list with elements if any was found.  An
            empty list if not
 
         :Usage:
-            elements = element.find_elements_by_id('foo')
+            ::
+
+                elements = element.find_elements_by_id('foo')
         """
+        warnings.warn("find_elements_by_* commands are deprecated. Please use find_elements() instead")
         return self.find_elements(by=By.ID, value=id_)
 
     def find_element_by_name(self, name):
@@ -204,8 +216,11 @@ class WebElement(object):
          - NoSuchElementException - if the element wasn't found
 
         :Usage:
-            element = element.find_element_by_name('foo')
+            ::
+
+                element = element.find_element_by_name('foo')
         """
+        warnings.warn("find_element_by_* commands are deprecated. Please use find_element() instead")
         return self.find_element(by=By.NAME, value=name)
 
     def find_elements_by_name(self, name):
@@ -219,8 +234,11 @@ class WebElement(object):
            empty list if not
 
         :Usage:
-            elements = element.find_elements_by_name('foo')
+            ::
+
+                elements = element.find_elements_by_name('foo')
         """
+        warnings.warn("find_elements_by_* commands are deprecated. Please use find_elements() instead")
         return self.find_elements(by=By.NAME, value=name)
 
     def find_element_by_link_text(self, link_text):
@@ -236,8 +254,11 @@ class WebElement(object):
          - NoSuchElementException - if the element wasn't found
 
         :Usage:
-            element = element.find_element_by_link_text('Sign In')
+            ::
+
+                element = element.find_element_by_link_text('Sign In')
         """
+        warnings.warn("find_element_by_* commands are deprecated. Please use find_element() instead")
         return self.find_element(by=By.LINK_TEXT, value=link_text)
 
     def find_elements_by_link_text(self, link_text):
@@ -251,8 +272,11 @@ class WebElement(object):
            empty list if not
 
         :Usage:
-            elements = element.find_elements_by_link_text('Sign In')
+            ::
+
+                elements = element.find_elements_by_link_text('Sign In')
         """
+        warnings.warn("find_elements_by_* commands are deprecated. Please use find_elements() instead")
         return self.find_elements(by=By.LINK_TEXT, value=link_text)
 
     def find_element_by_partial_link_text(self, link_text):
@@ -268,8 +292,11 @@ class WebElement(object):
          - NoSuchElementException - if the element wasn't found
 
         :Usage:
-            element = element.find_element_by_partial_link_text('Sign')
+            ::
+
+                element = element.find_element_by_partial_link_text('Sign')
         """
+        warnings.warn("find_element_by_* commands are deprecated. Please use find_element() instead")
         return self.find_element(by=By.PARTIAL_LINK_TEXT, value=link_text)
 
     def find_elements_by_partial_link_text(self, link_text):
@@ -283,8 +310,11 @@ class WebElement(object):
            empty list if not
 
         :Usage:
-            elements = element.find_elements_by_partial_link_text('Sign')
+            ::
+
+                elements = element.find_elements_by_partial_link_text('Sign')
         """
+        warnings.warn("find_elements_by_* commands are deprecated. Please use find_elements() instead")
         return self.find_elements(by=By.PARTIAL_LINK_TEXT, value=link_text)
 
     def find_element_by_tag_name(self, name):
@@ -300,8 +330,11 @@ class WebElement(object):
          - NoSuchElementException - if the element wasn't found
 
         :Usage:
-            element = element.find_element_by_tag_name('h1')
+            ::
+
+                element = element.find_element_by_tag_name('h1')
         """
+        warnings.warn("find_element_by_* commands are deprecated. Please use find_element() instead")
         return self.find_element(by=By.TAG_NAME, value=name)
 
     def find_elements_by_tag_name(self, name):
@@ -315,8 +348,11 @@ class WebElement(object):
            empty list if not
 
         :Usage:
-            elements = element.find_elements_by_tag_name('h1')
+            ::
+
+                elements = element.find_elements_by_tag_name('h1')
         """
+        warnings.warn("find_elements_by_* commands are deprecated. Please use find_elements() instead")
         return self.find_elements(by=By.TAG_NAME, value=name)
 
     def find_element_by_xpath(self, xpath):
@@ -346,8 +382,11 @@ class WebElement(object):
          - NoSuchElementException - if the element wasn't found
 
         :Usage:
-            element = element.find_element_by_xpath('//div/td[1]')
+            ::
+
+                element = element.find_element_by_xpath('//div/td[1]')
         """
+        warnings.warn("find_element_by_* commands are deprecated. Please use find_element() instead")
         return self.find_element(by=By.XPATH, value=xpath)
 
     def find_elements_by_xpath(self, xpath):
@@ -375,9 +414,12 @@ class WebElement(object):
            empty list if not
 
         :Usage:
-            elements = element.find_elements_by_xpath("//div[contains(@class, 'foo')]")
+            ::
+
+                elements = element.find_elements_by_xpath("//div[contains(@class, 'foo')]")
 
         """
+        warnings.warn("find_elements_by_* commands are deprecated. Please use find_elements() instead")
         return self.find_elements(by=By.XPATH, value=xpath)
 
     def find_element_by_class_name(self, name):
@@ -393,8 +435,11 @@ class WebElement(object):
          - NoSuchElementException - if the element wasn't found
 
         :Usage:
-            element = element.find_element_by_class_name('foo')
+            ::
+
+                element = element.find_element_by_class_name('foo')
         """
+        warnings.warn("find_element_by_* commands are deprecated. Please use find_element() instead")
         return self.find_element(by=By.CLASS_NAME, value=name)
 
     def find_elements_by_class_name(self, name):
@@ -408,8 +453,11 @@ class WebElement(object):
            empty list if not
 
         :Usage:
-            elements = element.find_elements_by_class_name('foo')
+            ::
+
+                elements = element.find_elements_by_class_name('foo')
         """
+        warnings.warn("find_elements_by_* commands are deprecated. Please use find_elements() instead")
         return self.find_elements(by=By.CLASS_NAME, value=name)
 
     def find_element_by_css_selector(self, css_selector):
@@ -425,8 +473,11 @@ class WebElement(object):
          - NoSuchElementException - if the element wasn't found
 
         :Usage:
-            element = element.find_element_by_css_selector('#foo')
+            ::
+
+                element = element.find_element_by_css_selector('#foo')
         """
+        warnings.warn("find_element_by_* commands are deprecated. Please use find_element() instead")
         return self.find_element(by=By.CSS_SELECTOR, value=css_selector)
 
     def find_elements_by_css_selector(self, css_selector):
@@ -440,8 +491,11 @@ class WebElement(object):
            empty list if not
 
         :Usage:
-            elements = element.find_elements_by_css_selector('.foo')
+            ::
+
+                elements = element.find_elements_by_css_selector('.foo')
         """
+        warnings.warn("find_elements_by_* commands are deprecated. Please use find_elements() instead")
         return self.find_elements(by=By.CSS_SELECTOR, value=css_selector)
 
     def send_keys(self, *value):
@@ -453,14 +507,14 @@ class WebElement(object):
 
         Use this to send simple key events or to fill out form fields::
 
-            form_textfield = driver.find_element_by_name('username')
+            form_textfield = driver.find_element(By.NAME, 'username')
             form_textfield.send_keys("admin")
 
         This can also be used to set file inputs.
 
         ::
 
-            file_input = driver.find_element_by_name('profilePic')
+            file_input = driver.find_element(By.NAME, 'profilePic')
             file_input.send_keys("path/to/profilepic.gif")
             # Generally it's better to wrap the file path in one of the methods
             # in os.path to return the actual path to support cross OS testing.
@@ -482,7 +536,7 @@ class WebElement(object):
     def is_displayed(self):
         """Whether the element is visible to a user."""
         # Only go into this conditional for browsers that don't use the atom themselves
-        if self._w3c and self.parent.capabilities['browserName'] == 'safari':
+        if self._w3c:
             return self.parent.execute_script(
                 "return (%s).apply(null, arguments);" % isDisplayed_js,
                 self)
@@ -539,7 +593,12 @@ class WebElement(object):
     @property
     def rect(self):
         """A dictionary with the size and location of the element."""
-        return self._execute(Command.GET_ELEMENT_RECT)['value']
+        if self._w3c:
+            return self._execute(Command.GET_ELEMENT_RECT)['value']
+        else:
+            rect = self.size.copy()
+            rect.update(self.location)
+            return rect
 
     @property
     def screenshot_as_base64(self):
@@ -547,7 +606,9 @@ class WebElement(object):
         Gets the screenshot of the current element as a base64 encoded string.
 
         :Usage:
-            img_b64 = element.screenshot_as_base64
+            ::
+
+                img_b64 = element.screenshot_as_base64
         """
         return self._execute(Command.ELEMENT_SCREENSHOT)['value']
 
@@ -557,7 +618,9 @@ class WebElement(object):
         Gets the screenshot of the current element as a binary data.
 
         :Usage:
-            element_png = element.screenshot_as_png
+            ::
+
+                element_png = element.screenshot_as_png
         """
         return base64.b64decode(self.screenshot_as_base64.encode('ascii'))
 
@@ -572,7 +635,9 @@ class WebElement(object):
            should end with a `.png` extension.
 
         :Usage:
-            element.screenshot('/Screenshots/foo.png')
+            ::
+
+                element.screenshot('/Screenshots/foo.png')
         """
         if not filename.lower().endswith('.png'):
             warnings.warn("name used for saved screenshot does not match file "
@@ -629,10 +694,13 @@ class WebElement(object):
 
     def find_element(self, by=By.ID, value=None):
         """
-        'Private' method used by the find_element_by_* methods.
+        Find an element given a By strategy and locator. Prefer the find_element_by_* methods when
+        possible.
 
         :Usage:
-            Use the corresponding find_element_by_* instead of this.
+            ::
+
+                element = element.find_element(By.ID, 'foo')
 
         :rtype: WebElement
         """
@@ -654,10 +722,13 @@ class WebElement(object):
 
     def find_elements(self, by=By.ID, value=None):
         """
-        'Private' method used by the find_elements_by_* methods.
+        Find elements given a By strategy and locator. Prefer the find_elements_by_* methods when
+        possible.
 
         :Usage:
-            Use the corresponding find_elements_by_* instead of this.
+            ::
+
+                element = element.find_elements(By.CLASS_NAME, 'foo')
 
         :rtype: list of WebElement
         """
@@ -685,7 +756,7 @@ class WebElement(object):
         zipped = zipfile.ZipFile(fp, 'w', zipfile.ZIP_DEFLATED)
         zipped.write(filename, os.path.split(filename)[1])
         zipped.close()
-        content = base64.encodestring(fp.getvalue())
+        content = encodebytes(fp.getvalue())
         if not isinstance(content, str):
             content = content.decode('utf-8')
         try:

@@ -21,8 +21,6 @@
 #include <string>
 #include <vector>
 
-#define INVALID_CONTROL_ID -1
-
 namespace webdriver {
 
 // Forward declaration of classes.
@@ -30,7 +28,7 @@ class DocumentHost;
 
 class Alert {
  public:
-  Alert(std::tr1::shared_ptr<DocumentHost> browser, HWND handle);
+  Alert(std::shared_ptr<DocumentHost> browser, HWND handle);
   virtual ~Alert(void);
 
   int Accept(void);
@@ -51,6 +49,8 @@ class Alert {
     HWND button_handle;
     int button_control_id;
     bool button_exists;
+    std::string accessibility_id;
+    bool use_accessibility;
   };
 
   struct DialogButtonFindInfo {
@@ -80,10 +80,13 @@ class Alert {
 
   DialogButtonInfo GetDialogButton(BUTTON_TYPE button_type);
   int ClickAlertButton(DialogButtonInfo button_info);
+  int ClickAlertButtonUsingAccessibility(const std::string& automation_id);
   std::string GetStandardDialogText(void);
   std::string GetDirectUIDialogText(void);
   HWND GetDirectUIChild(void);
-  IAccessible* GetChildWithRole(IAccessible* parent, long expected_role, int index);
+  IAccessible* GetChildWithRole(IAccessible* parent,
+                                long expected_role,
+                                int index);
 
   static bool IsOKButton(HWND button_handle);
   static bool IsCancelButton(HWND button_handle);
@@ -97,7 +100,7 @@ class Alert {
   static BOOL CALLBACK FindTextBoxes(HWND hwnd, LPARAM arg);
 
   HWND alert_handle_;
-  std::tr1::shared_ptr<DocumentHost> browser_;
+  std::shared_ptr<DocumentHost> browser_;
   bool is_standard_alert_;
   bool is_security_alert_;
   bool is_standard_control_alert_;

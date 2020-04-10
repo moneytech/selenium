@@ -20,16 +20,16 @@ package org.openqa.selenium.os;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.ImmutableMap.copyOf;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.openqa.selenium.os.WindowsUtils.thisIsWindows;
+import static org.openqa.selenium.Platform.WINDOWS;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Maps;
 
 import org.apache.commons.exec.DaemonExecutor;
 import org.apache.commons.exec.DefaultExecuteResultHandler;
 import org.apache.commons.exec.ExecuteWatchdog;
 import org.apache.commons.exec.Executor;
 import org.apache.commons.exec.PumpStreamHandler;
+import org.openqa.selenium.Platform;
 import org.openqa.selenium.WebDriverException;
 import org.openqa.selenium.io.CircularOutputStream;
 import org.openqa.selenium.io.MultiOutputStream;
@@ -84,7 +84,7 @@ class OsProcess {
   }
 
   private Map<String, String> getMergedEnv() {
-    HashMap<String, String> newEnv = Maps.newHashMap(System.getenv());
+    HashMap<String, String> newEnv = new HashMap<>(System.getenv());
     newEnv.putAll(env);
     return newEnv;
   }
@@ -117,7 +117,7 @@ class OsProcess {
 
     // I literally have no idea why we don't try and kill the process nicely on Windows. If you do,
     // answers on the back of a postcard to SeleniumHQ, please.
-    if (!thisIsWindows()) {
+    if (!Platform.getCurrent().is(WINDOWS)) {
       watchdog.destroyProcess();
       watchdog.waitForTerminationAfterDestroy(2, SECONDS);
     }
@@ -161,6 +161,9 @@ class OsProcess {
     long until = System.currentTimeMillis() + timeout;
     boolean timedOut = true;
     while (System.currentTimeMillis() < until) {
+      if (Thread.interrupted()) {
+        throw new InterruptedException();
+      }
       if (handler.hasResult()) {
         timedOut = false;
         break;
@@ -239,6 +242,7 @@ class OsProcess {
         try {
           Thread.sleep(50);
         } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
           throw new WebDriverException(e);
         }
       }
@@ -250,6 +254,7 @@ class OsProcess {
         try {
           Thread.sleep(50);
         } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
           throw new WebDriverException(e);
         }
       }
@@ -260,7 +265,7 @@ class OsProcess {
         Process awaitFor = this.process.destroyForcibly();
         awaitFor.waitFor(10, SECONDS);
       } catch (InterruptedException e) {
-        Thread.interrupted();
+        Thread.currentThread().interrupt();
         throw new RuntimeException(e);
       }
     }

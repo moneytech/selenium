@@ -20,6 +20,7 @@
 #include "errorcodes.h"
 #include "../Browser.h"
 #include "../IECommandExecutor.h"
+#include "../WebDriverConstants.h"
 
 namespace webdriver {
 
@@ -101,7 +102,8 @@ void FindChildElementCommandHandler::ExecuteInternal(
         return;
       }
       if (status_code == ENOSUCHWINDOW) {
-        response->SetErrorResponse(ERROR_NO_SUCH_WINDOW, "Unable to find element on closed window");
+        response->SetErrorResponse(ERROR_NO_SUCH_WINDOW, 
+                                   "Unable to find element on closed window");
         return;
       }
       if (status_code != ENOSUCHELEMENT) {
@@ -117,8 +119,13 @@ void FindChildElementCommandHandler::ExecuteInternal(
     response->SetErrorResponse(ERROR_NO_SUCH_ELEMENT, 
         "Unable to find element with " + mechanism + " == " + value);
   } else {
-    response->SetErrorResponse(ERROR_INVALID_ARGUMENT, "Element is no longer valid");
-    return;
+    if (status_code == EOBSOLETEELEMENT) {
+      response->SetErrorResponse(ERROR_STALE_ELEMENT_REFERENCE,
+                                 "Specified parent element is no longer attached to the DOM");
+    } else {
+      response->SetErrorResponse(ERROR_INVALID_ARGUMENT,
+                                 "Element is no longer valid");
+    }
   }
 }
 

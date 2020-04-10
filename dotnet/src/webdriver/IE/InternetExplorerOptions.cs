@@ -29,6 +29,11 @@ namespace OpenQA.Selenium.IE
     public enum InternetExplorerElementScrollBehavior
     {
         /// <summary>
+        /// Indicates the behavior is unspecified.
+        /// </summary>
+        Default,
+
+        /// <summary>
         /// Scrolls elements to align with the top of the viewport.
         /// </summary>
         Top,
@@ -37,32 +42,6 @@ namespace OpenQA.Selenium.IE
         /// Scrolls elements to align with the bottom of the viewport.
         /// </summary>
         Bottom
-    }
-
-    /// <summary>
-    /// Specifies the behavior of handling unexpected alerts in the IE driver.
-    /// </summary>
-    public enum InternetExplorerUnexpectedAlertBehavior
-    {
-        /// <summary>
-        /// Indicates the behavior is not set.
-        /// </summary>
-        Default,
-
-        /// <summary>
-        /// Ignore unexpected alerts, such that the user must handle them.
-        /// </summary>
-        Ignore,
-
-        /// <summary>
-        /// Accept unexpected alerts.
-        /// </summary>
-        Accept,
-
-        /// <summary>
-        /// Dismiss unexpected alerts.
-        /// </summary>
-        Dismiss
     }
 
     /// <summary>
@@ -90,7 +69,7 @@ namespace OpenQA.Selenium.IE
     {
         /// <summary>
         /// Gets the name of the capability used to store IE options in
-        /// a <see cref="DesiredCapabilities"/> object.
+        /// an <see cref="ICapabilities"/> object.
         /// </summary>
         public static readonly string Capability = "se:ieOptions";
 
@@ -120,16 +99,17 @@ namespace OpenQA.Selenium.IE
         private bool forceShellWindowsApi;
         private bool usePerProcessProxy;
         private bool ensureCleanSession;
-        private bool validateCookieDocumentType = true;
         private bool enableFullPageScreenshot = true;
         private TimeSpan browserAttachTimeout = TimeSpan.MinValue;
         private TimeSpan fileUploadDialogTimeout = TimeSpan.MinValue;
         private string initialBrowserUrl = string.Empty;
         private string browserCommandLineArguments = string.Empty;
-        private InternetExplorerElementScrollBehavior elementScrollBehavior = InternetExplorerElementScrollBehavior.Top;
-        private Dictionary<string, object> additionalCapabilities = new Dictionary<string, object>();
+        private InternetExplorerElementScrollBehavior elementScrollBehavior = InternetExplorerElementScrollBehavior.Default;
         private Dictionary<string, object> additionalInternetExplorerOptions = new Dictionary<string, object>();
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="InternetExplorerOptions"/> class.
+        /// </summary>
         public InternetExplorerOptions() : base()
         {
             this.BrowserName = BrowserNameValue;
@@ -213,17 +193,6 @@ namespace OpenQA.Selenium.IE
         {
             get { return this.elementScrollBehavior; }
             set { this.elementScrollBehavior = value; }
-        }
-
-        /// <summary>
-        /// Gets or sets the value for describing how unexpected alerts are to be handled in the IE driver.
-        /// Defaults to <see cref="InternetExplorerUnexpectedAlertBehavior.Default"/>.
-        /// </summary>
-        [Obsolete("This property is being replaced by the UnhandledPromptBehavior property, and will be removed in a future version of the .NET bindings. Please use that instead.")]
-        public InternetExplorerUnexpectedAlertBehavior UnexpectedAlertBehavior
-        {
-            get { return this.GetUnexpectedAlertBehavior(); }
-            set { this.SetUnhandledPromptBehavior(value); }
         }
 
         /// <summary>
@@ -314,14 +283,24 @@ namespace OpenQA.Selenium.IE
         }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to enable full-page screenshots for
-        /// the IE driver. Defaults to <see langword="true"/>.
+        /// Provides a means to add additional capabilities not yet added as type safe options
+        /// for the Internet Explorer driver.
         /// </summary>
-        [Obsolete("The driver no longer supports this capability. It will be removed in a future release.")]
-        public bool EnableFullPageScreenshot
+        /// <param name="optionName">The name of the capability to add.</param>
+        /// <param name="optionValue">The value of the capability to add.</param>
+        /// <exception cref="ArgumentException">
+        /// thrown when attempting to add a capability for which there is already a type safe option, or
+        /// when <paramref name="optionName"/> is <see langword="null"/> or the empty string.
+        /// </exception>
+        /// <remarks>Calling <see cref="AddAdditionalInternetExplorerOption(string, object)"/>
+        /// where <paramref name="optionName"/> has already been added will overwrite the
+        /// existing value with the new value in <paramref name="optionValue"/>.
+        /// Calling this method adds capabilities to the IE-specific options object passed to
+        /// IEDriverServer.exe (property name 'se:ieOptions').</remarks>
+        public void AddAdditionalInternetExplorerOption(string optionName, object optionValue)
         {
-            get { return this.enableFullPageScreenshot; }
-            set { this.enableFullPageScreenshot = value; }
+            this.ValidateCapabilityName(optionName);
+            this.additionalInternetExplorerOptions[optionName] = optionValue;
         }
 
         /// <summary>
@@ -339,6 +318,7 @@ namespace OpenQA.Selenium.IE
         /// existing value with the new value in <paramref name="capabilityValue"/>.
         /// Also, by default, calling this method adds capabilities to the options object passed to
         /// IEDriverServer.exe.</remarks>
+        [Obsolete("Use the temporary AddAdditionalOption method or the AddAdditionalInternetExplorerOption method for adding additional options")]
         public override void AddAdditionalCapability(string capabilityName, object capabilityValue)
         {
             // Add the capability to the ieOptions object by default. This is to handle
@@ -361,27 +341,16 @@ namespace OpenQA.Selenium.IE
         /// </exception>
         /// <remarks>Calling <see cref="AddAdditionalCapability(string, object, bool)"/> where <paramref name="capabilityName"/>
         /// has already been added will overwrite the existing value with the new value in <paramref name="capabilityValue"/></remarks>
+        [Obsolete("Use the temporary AddAdditionalOption method or the AddAdditionalInternetExplorerOption method for adding additional options")]
         public void AddAdditionalCapability(string capabilityName, object capabilityValue, bool isGlobalCapability)
         {
-            if (this.IsKnownCapabilityName(capabilityName))
-            {
-                string typeSafeOptionName = this.GetTypeSafeOptionName(capabilityName);
-                string message = string.Format(CultureInfo.InvariantCulture, "There is already an option for the {0} capability. Please use the {1} instead.", capabilityName, typeSafeOptionName);
-                throw new ArgumentException(message, "capabilityName");
-            }
-
-            if (string.IsNullOrEmpty(capabilityName))
-            {
-                throw new ArgumentException("Capability name may not be null an empty string.", "capabilityName");
-            }
-
             if (isGlobalCapability)
             {
-                this.additionalCapabilities[capabilityName] = capabilityValue;
+                this.AddAdditionalOption(capabilityName, capabilityValue);
             }
             else
             {
-                this.additionalInternetExplorerOptions[capabilityName] = capabilityValue;
+                this.AddAdditionalInternetExplorerOption(capabilityName, capabilityValue);
             }
         }
 
@@ -393,17 +362,12 @@ namespace OpenQA.Selenium.IE
         /// <returns>The DesiredCapabilities for IE with these options.</returns>
         public override ICapabilities ToCapabilities()
         {
-            DesiredCapabilities capabilities = this.GenerateDesiredCapabilities(true);
+            IWritableCapabilities capabilities = this.GenerateDesiredCapabilities(true);
 
             Dictionary<string, object> internetExplorerOptions = this.BuildInternetExplorerOptionsDictionary();
             capabilities.SetCapability(InternetExplorerOptions.Capability, internetExplorerOptions);
 
-            foreach (KeyValuePair<string, object> pair in this.additionalCapabilities)
-            {
-                capabilities.SetCapability(pair.Key, pair.Value);
-            }
-
-            return capabilities;
+            return capabilities.AsReadOnly();
         }
 
         private Dictionary<string, object> BuildInternetExplorerOptionsDictionary()
@@ -432,9 +396,16 @@ namespace OpenQA.Selenium.IE
                 internetExplorerOptionsDictionary[InitialBrowserUrlCapability] = this.initialBrowserUrl;
             }
 
-            if (this.elementScrollBehavior == InternetExplorerElementScrollBehavior.Bottom)
+            if (this.elementScrollBehavior != InternetExplorerElementScrollBehavior.Default)
             {
-                internetExplorerOptionsDictionary[ElementScrollBehaviorCapability] = 1;
+                if (this.elementScrollBehavior == InternetExplorerElementScrollBehavior.Bottom)
+                {
+                    internetExplorerOptionsDictionary[ElementScrollBehaviorCapability] = 1;
+                }
+                else
+                {
+                    internetExplorerOptionsDictionary[ElementScrollBehaviorCapability] = 0;
+                }
             }
 
             if (this.browserAttachTimeout != TimeSpan.MinValue)
@@ -482,45 +453,6 @@ namespace OpenQA.Selenium.IE
             }
 
             return internetExplorerOptionsDictionary;
-        }
-
-        private void SetUnhandledPromptBehavior(InternetExplorerUnexpectedAlertBehavior unexpectedAlertBehavior)
-        {
-            switch (unexpectedAlertBehavior)
-            {
-                case InternetExplorerUnexpectedAlertBehavior.Accept:
-                    this.UnhandledPromptBehavior = UnhandledPromptBehavior.AcceptAndNotify;
-                    break;
-
-                case InternetExplorerUnexpectedAlertBehavior.Dismiss:
-                    this.UnhandledPromptBehavior = UnhandledPromptBehavior.DismissAndNotify;
-                    break;
-
-                case InternetExplorerUnexpectedAlertBehavior.Ignore:
-                    this.UnhandledPromptBehavior = UnhandledPromptBehavior.Ignore;
-                    break;
-
-                default:
-                    this.UnhandledPromptBehavior = UnhandledPromptBehavior.Default;
-                    break;
-            }
-        }
-
-        private InternetExplorerUnexpectedAlertBehavior GetUnexpectedAlertBehavior()
-        {
-            switch (this.UnhandledPromptBehavior)
-            {
-                case UnhandledPromptBehavior.AcceptAndNotify:
-                    return InternetExplorerUnexpectedAlertBehavior.Accept;
-
-                case UnhandledPromptBehavior.DismissAndNotify:
-                    return InternetExplorerUnexpectedAlertBehavior.Dismiss;
-
-                case UnhandledPromptBehavior.Ignore:
-                    return InternetExplorerUnexpectedAlertBehavior.Ignore;
-            }
-
-            return InternetExplorerUnexpectedAlertBehavior.Default;
         }
     }
 }

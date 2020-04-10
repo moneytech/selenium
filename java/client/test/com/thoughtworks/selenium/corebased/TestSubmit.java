@@ -23,8 +23,8 @@ import org.junit.Test;
 
 public class TestSubmit extends InternalSelenseTestBase {
   @Test
-  public void testSubmit() throws Exception {
-    selenium.open("../tests/html/test_submit.html");
+  public void testSubmit() {
+    selenium.open("test_submit.html");
     selenium.submit("searchForm");
     assertEquals(selenium.getAlert(), "onsubmit called");
     selenium.check("okayToSubmit");

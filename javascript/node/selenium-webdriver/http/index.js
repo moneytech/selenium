@@ -59,6 +59,15 @@ function getRequestOptions(aUrl) {
 }
 
 
+/** @const {string} */
+const USER_AGENT = (function() {
+  const version = require('../package.json').version;
+  const platform =
+      ({'darwin': 'mac', 'win32': 'windows'}[process.platform]) || 'linux';
+  return `selenium/${version} (js ${platform})`;
+})();
+
+
 /**
  * A basic HTTP client used to send messages to a remote end.
  *
@@ -93,10 +102,14 @@ class HttpClient {
     let data;
 
     let headers = {};
-    httpRequest.headers.forEach(function(value, name) {
-      headers[name] = value;
-    });
 
+    if (httpRequest.headers) {
+      httpRequest.headers.forEach(function(value, name) {
+        headers[name] = value;
+      });
+    }
+
+    headers['User-Agent'] = USER_AGENT;
     headers['Content-Length'] = 0;
     if (httpRequest.method == 'POST' || httpRequest.method == 'PUT') {
       data = JSON.stringify(httpRequest.data);
@@ -174,6 +187,10 @@ function sendRequest(options, onOk, onError, opt_data, opt_proxy, opt_retries) {
     options.hostname = proxy.hostname;
     options.port = proxy.port;
 
+    // Update the protocol to avoid EPROTO errors when the webdriver proxy
+    // uses a different protocol from the remote selenium server.
+    options.protocol = opt_proxy.protocol;
+
     if (proxy.auth) {
       options.headers['Proxy-Authorization'] =
           'Basic ' + new Buffer(proxy.auth).toString('base64');
@@ -209,7 +226,8 @@ function sendRequest(options, onOk, onError, opt_data, opt_proxy, opt_retries) {
         search: location.search,
         hash: location.hash,
         headers: {
-          'Accept': 'application/json; charset=utf-8'
+          'Accept': 'application/json; charset=utf-8',
+          'User-Agent': USER_AGENT,
         }
       }, onOk, onError, undefined, opt_proxy);
       return;
@@ -221,7 +239,7 @@ function sendRequest(options, onOk, onError, opt_data, opt_proxy, opt_retries) {
       var resp = new httpLib.Response(
           /** @type {number} */(response.statusCode),
           /** @type {!Object<string>} */(response.headers),
-          body.join('').replace(/\0/g, ''));
+          Buffer.concat(body).toString('utf8').replace(/\0/g, ''));
       onOk(resp);
     });
   });
@@ -276,8 +294,10 @@ function isRetryableNetworkError(err) {
   if (err && err.code) {
     return err.code === 'ECONNABORTED' ||
           err.code === 'ECONNRESET' ||
+          err.code === 'ECONNREFUSED' ||
           err.code === 'EADDRINUSE' ||
-          err.code === 'EPIPE';
+          err.code === 'EPIPE' ||
+          err.code === 'ETIMEDOUT';
   }
 
   return false;
@@ -286,6 +306,7 @@ function isRetryableNetworkError(err) {
 
 // PUBLIC API
 
+exports.Agent = http.Agent;
 exports.Executor = httpLib.Executor;
 exports.HttpClient = HttpClient;
 exports.Request = httpLib.Request;

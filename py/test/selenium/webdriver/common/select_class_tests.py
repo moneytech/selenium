@@ -42,16 +42,18 @@ def testSelectByIndexSingle(driver, pages):
             assert sel.first_selected_option.text == select['values'][x]
 
 
-@pytest.mark.xfail_chrome
-@pytest.mark.xfail_firefox
+@pytest.mark.xfail_firefox(reason='https://bugzilla.mozilla.org/show_bug.cgi?id=1429403')
 @pytest.mark.xfail_remote
-@pytest.mark.xfail_marionette
-@pytest.mark.xfail_safari
-def testSelectDisabledByIndexShouldThrowException(driver, pages):
+def testSelectDisabledByIndex(driver, pages):
     pages.load("formPage.html")
     sel = Select(driver.find_element(By.NAME, disabledSelect['name']))
-    with pytest.raises(ElementNotSelectableException):
+    if driver.w3c:
+        selected = sel.first_selected_option
         sel.select_by_index(1)
+        assert selected == sel.first_selected_option
+    else:
+        with pytest.raises(ElementNotSelectableException):
+            sel.select_by_index(1)
 
 
 def testSelectByValueSingle(driver, pages):
@@ -64,16 +66,18 @@ def testSelectByValueSingle(driver, pages):
             assert sel.first_selected_option.text == select['values'][x]
 
 
-@pytest.mark.xfail_chrome
-@pytest.mark.xfail_firefox
+@pytest.mark.xfail_firefox(reason='https://bugzilla.mozilla.org/show_bug.cgi?id=1429403')
 @pytest.mark.xfail_remote
-@pytest.mark.xfail_marionette
-@pytest.mark.xfail_safari
-def testSelectDisabledByValueShouldThrowException(driver, pages):
+def testSelectDisabledByValue(driver, pages):
     pages.load("formPage.html")
     sel = Select(driver.find_element(By.NAME, disabledSelect['name']))
-    with pytest.raises(ElementNotSelectableException):
+    if driver.w3c:
+        selected = sel.first_selected_option
         sel.select_by_value('bar')
+        assert selected == sel.first_selected_option
+    else:
+        with pytest.raises(ElementNotSelectableException):
+            sel.select_by_value('bar')
 
 
 def testSelectByVisibleTextSingle(driver, pages):
@@ -89,6 +93,8 @@ def testSelectByVisibleTextSingle(driver, pages):
 
 @pytest.mark.xfail_chrome(
     reason='https://bugs.chromium.org/p/chromedriver/issues/detail?id=822')
+@pytest.mark.xfail_chromiumedge(
+    reason='https://bugs.chromium.org/p/chromedriver/issues/detail?id=822')
 def testSelectByVisibleTextShouldNormalizeSpaces(driver, pages):
     pages.load("formPage.html")
 
@@ -100,16 +106,18 @@ def testSelectByVisibleTextShouldNormalizeSpaces(driver, pages):
             assert sel.first_selected_option.text == select['values'][x]
 
 
-@pytest.mark.xfail_chrome
-@pytest.mark.xfail_firefox
+@pytest.mark.xfail_firefox(reason='https://bugzilla.mozilla.org/show_bug.cgi?id=1429403')
 @pytest.mark.xfail_remote
-@pytest.mark.xfail_marionette
-@pytest.mark.xfail_safari
-def testSelectDisabledByVisibleTextShouldThrowException(driver, pages):
+def testSelectDisabledByVisibleText(driver, pages):
     pages.load("formPage.html")
     sel = Select(driver.find_element(By.NAME, disabledSelect['name']))
-    with pytest.raises(ElementNotSelectableException):
+    if driver.w3c:
+        selected = sel.first_selected_option
         sel.select_by_visible_text('Bar')
+        assert selected == sel.first_selected_option
+    else:
+        with pytest.raises(ElementNotSelectableException):
+            sel.select_by_visible_text('Bar')
 
 
 def testSelectByIndexMultiple(driver, pages):

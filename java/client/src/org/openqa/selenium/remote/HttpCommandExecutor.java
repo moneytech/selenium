@@ -21,6 +21,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static org.openqa.selenium.remote.DriverCommand.GET_ALL_SESSIONS;
 import static org.openqa.selenium.remote.DriverCommand.NEW_SESSION;
 import static org.openqa.selenium.remote.DriverCommand.QUIT;
+import static org.openqa.selenium.remote.HttpSessionId.getSessionId;
 
 import com.google.common.collect.ImmutableMap;
 
@@ -36,8 +37,6 @@ import org.openqa.selenium.logging.profiler.HttpProfilerLogEntry;
 import org.openqa.selenium.remote.http.HttpClient;
 import org.openqa.selenium.remote.http.HttpRequest;
 import org.openqa.selenium.remote.http.HttpResponse;
-import org.openqa.selenium.remote.internal.ApacheHttpClient;
-import org.openqa.selenium.remote.internal.OkHttpClient;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -105,6 +104,7 @@ public class HttpCommandExecutor implements CommandExecutor, NeedsLocalLogs {
     commandCodec.defineCommand(commandName, info.getMethod(), info.getUrl());
   }
 
+  @Override
   public void setLocalLogs(LocalLogs logs) {
     this.logs = logs;
   }
@@ -117,6 +117,7 @@ public class HttpCommandExecutor implements CommandExecutor, NeedsLocalLogs {
     return remoteServer;
   }
 
+  @Override
   public Response execute(Command command) throws IOException {
     if (command.getSessionId() == null) {
       if (QUIT.equals(command.getName())) {
@@ -148,7 +149,7 @@ public class HttpCommandExecutor implements CommandExecutor, NeedsLocalLogs {
 
     if (commandCodec == null || responseCodec == null) {
       throw new WebDriverException(
-        "No command or response codec has been defined. Unable to proceed");
+          "No command or response codec has been defined. Unable to proceed");
     }
 
     HttpRequest httpRequest = commandCodec.encode(command);
@@ -160,7 +161,7 @@ public class HttpCommandExecutor implements CommandExecutor, NeedsLocalLogs {
       Response response = responseCodec.decode(httpResponse);
       if (response.getSessionId() == null) {
         if (httpResponse.getTargetHost() != null) {
-          response.setSessionId(HttpSessionId.getSessionId(httpResponse.getTargetHost()));
+          response.setSessionId(getSessionId(httpResponse.getTargetHost()).orElse(null));
         } else {
           // Spam in the session id from the request
           response.setSessionId(command.getSessionId().toString());

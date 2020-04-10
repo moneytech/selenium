@@ -17,13 +17,12 @@
 
 package org.openqa.selenium.interactions;
 
-import com.google.common.collect.ImmutableList;
-
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.interactions.internal.SingleKeyAction;
-import org.openqa.selenium.interactions.internal.Locatable;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -33,6 +32,7 @@ import java.util.List;
  */
 @Deprecated
 public class KeyDownAction extends SingleKeyAction implements Action {
+
   public KeyDownAction(Keyboard keyboard, Mouse mouse, Locatable locationProvider, Keys key) {
     super(keyboard, mouse, locationProvider, key);
   }
@@ -41,6 +41,7 @@ public class KeyDownAction extends SingleKeyAction implements Action {
     super(keyboard, mouse, key);
   }
 
+  @Override
   public void perform() {
     focusOnElement();
 
@@ -49,11 +50,9 @@ public class KeyDownAction extends SingleKeyAction implements Action {
 
   @Override
   public List<Interaction> asInteractions(PointerInput mouse, KeyInput keyboard) {
-    ImmutableList.Builder<Interaction> interactions = ImmutableList.builder();
-
-    optionallyClickElement(mouse, interactions);
+    List<Interaction> interactions = new ArrayList<>(optionallyClickElement(mouse));
     interactions.add(keyboard.createKeyDown(key.getCodePoint()));
 
-    return interactions.build();
+    return Collections.unmodifiableList(interactions);
   }
 }

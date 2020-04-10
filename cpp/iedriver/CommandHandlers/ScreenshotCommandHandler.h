@@ -33,15 +33,17 @@ class ScreenshotCommandHandler : public IECommandHandler {
   void ExecuteInternal(const IECommandExecutor& executor,
                        const ParametersMap& command_parameters,
                        Response* response);
+  int GenerateScreenshotImage(BrowserHandle browser_wrapper);
+  HRESULT GetBase64Data(std::string& data);
+  void ClearImage();
+  void CropImage(HWND content_window_handle, LocationInfo element_location);
 
  private:
-  void ClearImage();
   HRESULT CaptureViewport(BrowserHandle browser);
   void CaptureWindow(HWND window_handle,
                      long width,
                      long height);
   bool IsSameColour();
-  HRESULT GetBase64Data(std::string& data);
   void GetWindowDimensions(HWND window_handle,
                            int* width,
                            int* height);
