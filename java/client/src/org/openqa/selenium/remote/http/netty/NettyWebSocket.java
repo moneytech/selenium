@@ -21,6 +21,7 @@ import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.ListenableFuture;
 import org.asynchttpclient.ws.WebSocketListener;
 import org.asynchttpclient.ws.WebSocketUpgradeHandler;
+import org.openqa.selenium.internal.Require;
 import org.openqa.selenium.remote.http.BinaryMessage;
 import org.openqa.selenium.remote.http.ClientConfig;
 import org.openqa.selenium.remote.http.CloseMessage;
@@ -36,7 +37,6 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
@@ -51,12 +51,14 @@ class NettyWebSocket implements WebSocket {
   private final org.asynchttpclient.ws.WebSocket socket;
 
   private NettyWebSocket(AsyncHttpClient client, org.asynchttpclient.Request request, Listener listener) {
-    Objects.requireNonNull(client, "HTTP client to use must be set.");
-    Objects.requireNonNull(listener, "WebSocket listener must be set.");
+    Require.nonNull("HTTP client", client);
+    Require.nonNull("WebSocket listener", listener);
 
     try {
       URL origUrl = new URL(request.getUrl());
-      URI wsUri = new URI("ws", null, origUrl.getHost(), origUrl.getPort(), origUrl.getPath(), null, null);
+      String wsScheme = "https".equalsIgnoreCase(origUrl.getProtocol()) ? "wss" : "ws";
+
+      URI wsUri = new URI(wsScheme, null, origUrl.getHost(), origUrl.getPort(), origUrl.getPath(), null, null);
       ListenableFuture<org.asynchttpclient.netty.ws.NettyWebSocket> future = client.prepareGet(wsUri.toString())
         .execute(new WebSocketUpgradeHandler.Builder()
           .addWebSocketListener(new WebSocketListener() {
@@ -72,6 +74,13 @@ class NettyWebSocket implements WebSocket {
             @Override
             public void onError(Throwable t) {
               listener.onError(t);
+            }
+
+            @Override
+            public void onBinaryFrame(byte[] payload, boolean finalFragment, int rsv) {
+              if (payload != null) {
+                listener.onBinary(payload);
+              }
             }
 
             @Override

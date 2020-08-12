@@ -6,6 +6,10 @@
     - setEdgePath
     - setEdgeChromium
     - setScrollBehavior
+    - For consistent naming, deprecating `addArguments(...args)` in favor of `addBrowserCommandSwitches(...args)`
+    
+* Added relative locators
+* Added Chrome DevTools Protocol (CDP) support
 
 ### API Changes
 

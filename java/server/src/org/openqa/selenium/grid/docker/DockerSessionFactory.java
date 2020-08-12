@@ -17,7 +17,6 @@
 
 package org.openqa.selenium.grid.docker;
 
-import io.opentelemetry.trace.Tracer;
 import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.ImmutableCapabilities;
 import org.openqa.selenium.SessionNotCreatedException;
@@ -29,6 +28,7 @@ import org.openqa.selenium.docker.Port;
 import org.openqa.selenium.grid.data.CreateSessionRequest;
 import org.openqa.selenium.grid.node.ActiveSession;
 import org.openqa.selenium.grid.node.SessionFactory;
+import org.openqa.selenium.internal.Require;
 import org.openqa.selenium.net.PortProber;
 import org.openqa.selenium.remote.Command;
 import org.openqa.selenium.remote.Dialect;
@@ -39,6 +39,11 @@ import org.openqa.selenium.remote.SessionId;
 import org.openqa.selenium.remote.http.HttpClient;
 import org.openqa.selenium.remote.http.HttpRequest;
 import org.openqa.selenium.remote.http.HttpResponse;
+import org.openqa.selenium.remote.tracing.EventAttribute;
+import org.openqa.selenium.remote.tracing.EventAttributeValue;
+import org.openqa.selenium.remote.tracing.Span;
+import org.openqa.selenium.remote.tracing.Status;
+import org.openqa.selenium.remote.tracing.Tracer;
 import org.openqa.selenium.support.ui.FluentWait;
 import org.openqa.selenium.support.ui.Wait;
 
@@ -47,6 +52,7 @@ import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -74,12 +80,12 @@ public class DockerSessionFactory implements SessionFactory {
       Docker docker,
       Image image,
       Capabilities stereotype) {
-    this.tracer = Objects.requireNonNull(tracer, "Tracer must be set.");
-    this.clientFactory = Objects.requireNonNull(clientFactory, "HTTP client must be set.");
-    this.docker = Objects.requireNonNull(docker, "Docker command must be set.");
-    this.image = Objects.requireNonNull(image, "Docker image to use must be set.");
+    this.tracer = Require.nonNull("Tracer", tracer);
+    this.clientFactory = Require.nonNull("HTTP client", clientFactory);
+    this.docker = Require.nonNull("Docker command", docker);
+    this.image = Require.nonNull("Docker image", image);
     this.stereotype = ImmutableCapabilities.copyOf(
-        Objects.requireNonNull(stereotype, "Stereotype must be set."));
+        Require.nonNull("Stereotype", stereotype));
   }
 
   @Override
@@ -97,6 +103,7 @@ public class DockerSessionFactory implements SessionFactory {
     URL remoteAddress = getUrl(port);
     HttpClient client = clientFactory.createClient(remoteAddress);
 
+    try (Span span = tracer.getCurrentContext().createSpan("docker_session_factory.apply")) {
     LOG.info("Creating container, mapping container port 4444 to " + port);
     Container container = docker.create(image(image).map(Port.tcp(4444), Port.tcp(port)));
     container.start();
@@ -105,6 +112,14 @@ public class DockerSessionFactory implements SessionFactory {
     try {
       waitForServerToStart(client, Duration.ofMinutes(1));
     } catch (TimeoutException e) {
+      span.setAttribute("error", true);
+      span.setStatus(Status.CANCELLED);
+      Map<String, EventAttributeValue> attributeValueMap = new HashMap<>();
+      attributeValueMap.put("Error Message", EventAttribute.setValue(e.getMessage()));
+      attributeValueMap
+          .put("Container id", EventAttribute.setValue(container.getId().toString()));
+      span.addEvent("Unable to connect to docker server. Stopping container", attributeValueMap);
+
       container.stop(Duration.ofMinutes(1));
       container.delete();
       LOG.warning(String.format(
@@ -122,6 +137,14 @@ public class DockerSessionFactory implements SessionFactory {
       result = new ProtocolHandshake().createSession(client, command);
       response = result.createResponse();
     } catch (IOException | RuntimeException e) {
+      span.setAttribute("error", true);
+      span.setStatus(Status.CANCELLED);
+      Map<String, EventAttributeValue> attributeValueMap = new HashMap<>();
+      attributeValueMap.put("Error Message", EventAttribute.setValue(e.getMessage()));
+      attributeValueMap
+          .put("Container id", EventAttribute.setValue(container.getId().toString()));
+      span.addEvent("Unable to create session. Stopping container", attributeValueMap);
+
       container.stop(Duration.ofMinutes(1));
       container.delete();
       LOG.log(Level.WARNING, "Unable to create session: " + e.getMessage(), e);
@@ -149,6 +172,7 @@ public class DockerSessionFactory implements SessionFactory {
         capabilities,
         downstream,
         result.getDialect()));
+    }
   }
 
   private void waitForServerToStart(HttpClient client, Duration duration) {

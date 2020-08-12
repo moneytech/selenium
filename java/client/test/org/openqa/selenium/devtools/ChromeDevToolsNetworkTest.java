@@ -18,67 +18,67 @@
 package org.openqa.selenium.devtools;
 
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.openqa.selenium.devtools.network.Network.clearBrowserCache;
-import static org.openqa.selenium.devtools.network.Network.clearBrowserCookies;
-import static org.openqa.selenium.devtools.network.Network.continueInterceptedRequest;
-import static org.openqa.selenium.devtools.network.Network.dataReceived;
-import static org.openqa.selenium.devtools.network.Network.deleteCookies;
-import static org.openqa.selenium.devtools.network.Network.disable;
-import static org.openqa.selenium.devtools.network.Network.emulateNetworkConditions;
-import static org.openqa.selenium.devtools.network.Network.enable;
-import static org.openqa.selenium.devtools.network.Network.eventSourceMessageReceived;
-import static org.openqa.selenium.devtools.network.Network.getAllCookies;
-import static org.openqa.selenium.devtools.network.Network.getCertificate;
-import static org.openqa.selenium.devtools.network.Network.getCookies;
-import static org.openqa.selenium.devtools.network.Network.getRequestPostData;
-import static org.openqa.selenium.devtools.network.Network.getResponseBody;
-import static org.openqa.selenium.devtools.network.Network.loadingFailed;
-import static org.openqa.selenium.devtools.network.Network.loadingFinished;
-import static org.openqa.selenium.devtools.network.Network.requestIntercepted;
-import static org.openqa.selenium.devtools.network.Network.requestServedFromCache;
-import static org.openqa.selenium.devtools.network.Network.requestWillBeSent;
-import static org.openqa.selenium.devtools.network.Network.resourceChangedPriority;
-import static org.openqa.selenium.devtools.network.Network.responseReceived;
-import static org.openqa.selenium.devtools.network.Network.searchInResponseBody;
-import static org.openqa.selenium.devtools.network.Network.setBlockedURLs;
-import static org.openqa.selenium.devtools.network.Network.setBypassServiceWorker;
-import static org.openqa.selenium.devtools.network.Network.setCacheDisabled;
-import static org.openqa.selenium.devtools.network.Network.setCookie;
-import static org.openqa.selenium.devtools.network.Network.setDataSizeLimitsForTest;
-import static org.openqa.selenium.devtools.network.Network.setExtraHTTPHeaders;
-import static org.openqa.selenium.devtools.network.Network.setRequestInterception;
-import static org.openqa.selenium.devtools.network.Network.setUserAgentOverride;
-import static org.openqa.selenium.devtools.network.Network.signedExchangeReceived;
-import static org.openqa.selenium.devtools.network.Network.webSocketClosed;
-import static org.openqa.selenium.devtools.network.Network.webSocketCreated;
-import static org.openqa.selenium.devtools.network.Network.webSocketFrameError;
-import static org.openqa.selenium.devtools.network.Network.webSocketFrameReceived;
-import static org.openqa.selenium.devtools.network.Network.webSocketFrameSent;
-import static org.openqa.selenium.testing.drivers.Browser.CHROME;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-
 import org.junit.Assert;
 import org.junit.Test;
 import org.openqa.selenium.By;
-import org.openqa.selenium.devtools.network.Network;
-import org.openqa.selenium.devtools.network.model.BlockedReason;
-import org.openqa.selenium.devtools.network.model.ConnectionType;
-import org.openqa.selenium.devtools.network.model.Cookie;
-import org.openqa.selenium.devtools.network.model.Headers;
-import org.openqa.selenium.devtools.network.model.InterceptionStage;
-import org.openqa.selenium.devtools.network.model.RequestId;
-import org.openqa.selenium.devtools.network.model.RequestPattern;
-import org.openqa.selenium.devtools.network.model.ResourceType;
+import org.openqa.selenium.devtools.v84.network.Network;
+import org.openqa.selenium.devtools.v84.network.model.BlockedReason;
+import org.openqa.selenium.devtools.v84.network.model.ConnectionType;
+import org.openqa.selenium.devtools.v84.network.model.Cookie;
+import org.openqa.selenium.devtools.v84.network.model.Headers;
+import org.openqa.selenium.devtools.v84.network.model.InterceptionStage;
+import org.openqa.selenium.devtools.v84.network.model.RequestId;
+import org.openqa.selenium.devtools.v84.network.model.RequestPattern;
+import org.openqa.selenium.devtools.v84.network.model.ResourceType;
 import org.openqa.selenium.remote.http.HttpMethod;
 import org.openqa.selenium.testing.NotYetImplemented;
 
 import java.util.List;
 import java.util.Optional;
+
+import static java.util.Collections.singletonList;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.openqa.selenium.devtools.v84.network.Network.clearBrowserCache;
+import static org.openqa.selenium.devtools.v84.network.Network.clearBrowserCookies;
+import static org.openqa.selenium.devtools.v84.network.Network.continueInterceptedRequest;
+import static org.openqa.selenium.devtools.v84.network.Network.dataReceived;
+import static org.openqa.selenium.devtools.v84.network.Network.deleteCookies;
+import static org.openqa.selenium.devtools.v84.network.Network.disable;
+import static org.openqa.selenium.devtools.v84.network.Network.emulateNetworkConditions;
+import static org.openqa.selenium.devtools.v84.network.Network.enable;
+import static org.openqa.selenium.devtools.v84.network.Network.eventSourceMessageReceived;
+import static org.openqa.selenium.devtools.v84.network.Network.getAllCookies;
+import static org.openqa.selenium.devtools.v84.network.Network.getCertificate;
+import static org.openqa.selenium.devtools.v84.network.Network.getCookies;
+import static org.openqa.selenium.devtools.v84.network.Network.getRequestPostData;
+import static org.openqa.selenium.devtools.v84.network.Network.getResponseBody;
+import static org.openqa.selenium.devtools.v84.network.Network.loadingFailed;
+import static org.openqa.selenium.devtools.v84.network.Network.loadingFinished;
+import static org.openqa.selenium.devtools.v84.network.Network.requestIntercepted;
+import static org.openqa.selenium.devtools.v84.network.Network.requestServedFromCache;
+import static org.openqa.selenium.devtools.v84.network.Network.requestWillBeSent;
+import static org.openqa.selenium.devtools.v84.network.Network.resourceChangedPriority;
+import static org.openqa.selenium.devtools.v84.network.Network.responseReceived;
+import static org.openqa.selenium.devtools.v84.network.Network.searchInResponseBody;
+import static org.openqa.selenium.devtools.v84.network.Network.setBlockedURLs;
+import static org.openqa.selenium.devtools.v84.network.Network.setBypassServiceWorker;
+import static org.openqa.selenium.devtools.v84.network.Network.setCacheDisabled;
+import static org.openqa.selenium.devtools.v84.network.Network.setCookie;
+import static org.openqa.selenium.devtools.v84.network.Network.setDataSizeLimitsForTest;
+import static org.openqa.selenium.devtools.v84.network.Network.setExtraHTTPHeaders;
+import static org.openqa.selenium.devtools.v84.network.Network.setRequestInterception;
+import static org.openqa.selenium.devtools.v84.network.Network.setUserAgentOverride;
+import static org.openqa.selenium.devtools.v84.network.Network.signedExchangeReceived;
+import static org.openqa.selenium.devtools.v84.network.Network.webSocketClosed;
+import static org.openqa.selenium.devtools.v84.network.Network.webSocketCreated;
+import static org.openqa.selenium.devtools.v84.network.Network.webSocketFrameError;
+import static org.openqa.selenium.devtools.v84.network.Network.webSocketFrameReceived;
+import static org.openqa.selenium.devtools.v84.network.Network.webSocketFrameSent;
+import static org.openqa.selenium.testing.drivers.Browser.CHROME;
 
 public class ChromeDevToolsNetworkTest extends DevToolsTestBase {
 
@@ -92,9 +92,16 @@ public class ChromeDevToolsNetworkTest extends DevToolsTestBase {
     assertEquals(0, allCookies.size());
 
     boolean setCookie = devTools.send(setCookie(
-        "name", "value", Optional.of("http://localhost/devtools/test"),
-        Optional.of("localhost"), Optional.of("/devtools/test"),
-        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()));
+      "name",
+      "value",
+      Optional.of("http://localhost/devtools/test"),
+      Optional.of("localhost"),
+      Optional.of("/devtools/test"),
+      Optional.empty(),
+      Optional.empty(),
+      Optional.empty(),
+      Optional.empty(),
+      Optional.empty()));
     assertTrue(setCookie);
 
     assertEquals(1, devTools.send(getAllCookies()).size());
@@ -108,9 +115,16 @@ public class ChromeDevToolsNetworkTest extends DevToolsTestBase {
     assertEquals(0, devTools.send(getAllCookies()).size());
 
     setCookie = devTools.send(setCookie(
-        "name", "value", Optional.of("http://localhost/devtools/test"),
-        Optional.of("localhost"), Optional.of("/devtools/test"),
-        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()));
+      "name",
+      "value",
+      Optional.of("http://localhost/devtools/test"),
+      Optional.of("localhost"),
+      Optional.of("/devtools/test"),
+      Optional.empty(),
+      Optional.empty(),
+      Optional.empty(),
+      Optional.empty(),
+      Optional.empty()));
     assertTrue(setCookie);
 
     assertEquals(1, devTools.send(getAllCookies()).size());
@@ -121,7 +135,7 @@ public class ChromeDevToolsNetworkTest extends DevToolsTestBase {
 
     devTools.send(enable(Optional.empty(), Optional.empty(), Optional.empty()));
 
-    devTools.send(setBlockedURLs(ImmutableList.of("*://*/*.css")));
+    devTools.send(setBlockedURLs(singletonList("*://*/*.css")));
 
     devTools.send(setExtraHTTPHeaders(new Headers(ImmutableMap.of("headerName", "headerValue"))));
 
@@ -219,7 +233,7 @@ public class ChromeDevToolsNetworkTest extends DevToolsTestBase {
 
     devTools.send(enable(Optional.empty(), Optional.empty(), Optional.empty()));
 
-    devTools.send(setUserAgentOverride("userAgent", Optional.empty(), Optional.empty()));
+    devTools.send(setUserAgentOverride("userAgent", Optional.empty(), Optional.empty(), Optional.empty()));
 
     devTools.addListener(requestWillBeSent(),
                          requestWillBeSent -> assertEquals("userAgent",
@@ -342,9 +356,10 @@ public class ChromeDevToolsNetworkTest extends DevToolsTestBase {
                                                         Optional.empty(),
                                                         Optional.empty(), Optional.empty())));
 
-    RequestPattern
-        requestPattern =
-        new RequestPattern("*.css", ResourceType.STYLESHEET, InterceptionStage.HEADERSRECEIVED);
+    RequestPattern requestPattern = new RequestPattern(
+      Optional.of("*.css"),
+      Optional.of(ResourceType.STYLESHEET),
+      Optional.of(InterceptionStage.HEADERSRECEIVED));
     devTools.send(setRequestInterception(ImmutableList.of(requestPattern)));
 
     driver.get(appServer.whereIs("js/skins/lightgray/content.min.css"));

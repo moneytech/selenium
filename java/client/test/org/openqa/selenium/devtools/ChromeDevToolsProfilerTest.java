@@ -17,30 +17,34 @@
 
 package org.openqa.selenium.devtools;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.openqa.selenium.devtools.profiler.Profiler.consoleProfileFinished;
-import static org.openqa.selenium.devtools.profiler.Profiler.consoleProfileStarted;
-import static org.openqa.selenium.devtools.profiler.Profiler.disable;
-import static org.openqa.selenium.devtools.profiler.Profiler.enable;
-import static org.openqa.selenium.devtools.profiler.Profiler.getBestEffortCoverage;
-import static org.openqa.selenium.devtools.profiler.Profiler.setSamplingInterval;
-import static org.openqa.selenium.devtools.profiler.Profiler.start;
-import static org.openqa.selenium.devtools.profiler.Profiler.startPreciseCoverage;
-import static org.openqa.selenium.devtools.profiler.Profiler.startTypeProfile;
-import static org.openqa.selenium.devtools.profiler.Profiler.stop;
-import static org.openqa.selenium.devtools.profiler.Profiler.stopTypeProfile;
-import static org.openqa.selenium.devtools.profiler.Profiler.takePreciseCoverage;
-
 import org.junit.Assert;
 import org.junit.Test;
-import org.openqa.selenium.devtools.profiler.model.Profile;
-import org.openqa.selenium.devtools.profiler.model.ProfileNode;
-import org.openqa.selenium.devtools.profiler.model.ScriptCoverage;
+import org.openqa.selenium.devtools.v84.profiler.Profiler;
+import org.openqa.selenium.devtools.v84.profiler.model.Profile;
+import org.openqa.selenium.devtools.v84.profiler.model.ProfileNode;
+import org.openqa.selenium.devtools.v84.profiler.model.ScriptCoverage;
+import org.openqa.selenium.testing.Ignore;
 
 import java.util.List;
 import java.util.Optional;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.openqa.selenium.devtools.v84.profiler.Profiler.consoleProfileFinished;
+import static org.openqa.selenium.devtools.v84.profiler.Profiler.consoleProfileStarted;
+import static org.openqa.selenium.devtools.v84.profiler.Profiler.disable;
+import static org.openqa.selenium.devtools.v84.profiler.Profiler.enable;
+import static org.openqa.selenium.devtools.v84.profiler.Profiler.getBestEffortCoverage;
+import static org.openqa.selenium.devtools.v84.profiler.Profiler.setSamplingInterval;
+import static org.openqa.selenium.devtools.v84.profiler.Profiler.start;
+import static org.openqa.selenium.devtools.v84.profiler.Profiler.startPreciseCoverage;
+import static org.openqa.selenium.devtools.v84.profiler.Profiler.startTypeProfile;
+import static org.openqa.selenium.devtools.v84.profiler.Profiler.stop;
+import static org.openqa.selenium.devtools.v84.profiler.Profiler.stopTypeProfile;
+import static org.openqa.selenium.devtools.v84.profiler.Profiler.takePreciseCoverage;
+import static org.openqa.selenium.testing.drivers.Browser.FIREFOX;
+
+@Ignore(FIREFOX)
 public class ChromeDevToolsProfilerTest extends DevToolsTestBase {
 
   private void validateProfile(Profile profiler) {
@@ -49,7 +53,7 @@ public class ChromeDevToolsProfilerTest extends DevToolsTestBase {
     assertNotNull(profiler.getStartTime());
     assertNotNull(profiler.getEndTime());
     assertNotNull(profiler.getTimeDeltas());
-    for (Integer integer : profiler.getTimeDeltas()) {
+    for (Integer integer : profiler.getTimeDeltas().get()) {
       assertNotNull(integer);
     }
     for (ProfileNode n : profiler.getNodes()) {
@@ -73,9 +77,9 @@ public class ChromeDevToolsProfilerTest extends DevToolsTestBase {
   public void sampleSetStartPreciseCoverageTest() {
     devTools.send(enable());
     driver.get(appServer.whereIs("devToolsProfilerTest.html"));
-    devTools.send(startPreciseCoverage(Optional.of(true), Optional.of(true)));
+    devTools.send(startPreciseCoverage(Optional.of(true), Optional.of(true), Optional.empty()));
     devTools.send(start());
-    List<ScriptCoverage> pc = devTools.send(takePreciseCoverage());
+    Profiler.TakePreciseCoverageResponse pc = devTools.send(takePreciseCoverage());
     assertNotNull(pc);
     Profile profiler = devTools.send(stop());
     validateProfile(profiler);
